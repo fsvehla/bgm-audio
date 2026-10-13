@@ -1,0 +1,28 @@
+bgm-audio — TODO
+================
+
+Goal: lightweight macOS player for long BGM/ambience files, replacing a
+browser tab left open for background music. Personal use. Rust + GPUI,
+webby look is fine.
+
+Done (first pass, needs testing by hand)
+- [x] AVPlayer playback: play/pause, seek, ±10 s, volume, loop
+- [x] Chapters from the file: list, prev/next, markers on the progress bar
+- [x] Cover art (window + Now Playing)
+- [x] Now Playing / media keys / Control Center (chapter = title, file = album)
+- [x] Persistence in ~/Library/Application Support/bgm-audio/state.json:
+      session restore (paused, rewinds 3 s), per-file position, recent list,
+      bookmarks so moved files are found again, saves every 5 s while playing
+- [x] Mic auto-pause via CoreAudio process objects, resume only if we paused,
+      1.5 s debounce, toggle in the window
+
+Next
+- [x] Verified with computer use: play/pause, chapter seek, bar seek, volume,
+      Now Playing (title/album/cover/controls), media key pauses the app
+- [x] Minimal .app bundle: packaging/bundle.sh [debug|release]
+- [x] Mic: ignore com.apple.avconferenced (holds the mic during Remote Control)
+- [x] Now Playing: prev/next chapter buttons when the file has chapters, else ±10 s
+- [x] Chapters | Recent tabs (remembered); Recent shows progress, "x min ago", ×
+- [ ] File associations in Info.plist ("Open With") + on_open_urls handling
+- [ ] App icon
+- [ ] Menu bar extra instead of / in addition to the window?

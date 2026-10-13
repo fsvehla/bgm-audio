@@ -1,0 +1,186 @@
+//! Persistent state: volume, settings and per-file positions (= the recent list).
+//!
+//! Stored as JSON in ~/Library/Application Support/bgm-audio/state.json and
+//! written atomically (temp file + rename).
+
+use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use objc2::AllocAnyThread;
+use objc2::runtime::Bool;
+use objc2_foundation::{
+    NSData, NSDataBase64DecodingOptions, NSDataBase64EncodingOptions, NSString, NSURL,
+    NSURLBookmarkCreationOptions, NSURLBookmarkResolutionOptions,
+};
+use serde::{Deserialize, Serialize};
+
+const VERSION: u32 = 1;
+const MAX_RECENT: usize = 30;
+
+#[derive(Serialize, Deserialize)]
+#[serde(default)]
+pub struct State {
+    pub version: u32,
+    pub volume: f32,
+    pub looping: bool,
+    pub mic_auto_pause: bool,
+    /// Which list the window shows under the player.
+    pub tab: Tab,
+    /// Most recently played first. The first entry is the session to restore.
+    pub files: Vec<FileEntry>,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            version: VERSION,
+            volume: 0.7,
+            looping: true,
+            mic_auto_pause: true,
+            tab: Tab::Chapters,
+            files: Vec::new(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum Tab {
+    #[default]
+    Chapters,
+    Recent,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct FileEntry {
+    pub path: PathBuf,
+    /// Base64 macOS bookmark: finds the file after it is moved or renamed.
+    #[serde(default)]
+    pub bookmark: Option<String>,
+    pub title: String,
+    pub position: f64,
+    pub duration: f64,
+    /// Unix seconds.
+    pub last_played: u64,
+}
+
+impl FileEntry {
+    /// Current location of the file, following the bookmark if it moved.
+    pub fn resolve(&self) -> Option<PathBuf> {
+        if self.path.is_file() {
+            return Some(self.path.clone());
+        }
+        let bookmark = self.bookmark.as_deref()?;
+        resolve_bookmark(bookmark).filter(|p| p.is_file())
+    }
+}
+
+impl State {
+    pub fn load() -> Self {
+        std::fs::read(file())
+            .ok()
+            .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+            .unwrap_or_default()
+    }
+
+    pub fn save(&self) {
+        let path = file();
+        let tmp = path.with_extension("json.tmp");
+        let result = (|| -> std::io::Result<()> {
+            std::fs::create_dir_all(path.parent().unwrap())?;
+            std::fs::write(&tmp, serde_json::to_vec_pretty(self)?)?;
+            std::fs::rename(&tmp, &path)
+        })();
+        if let Err(e) = result {
+            eprintln!("bgm-audio: could not save state: {e}");
+        }
+    }
+
+    /// The file entry for `path`, if we have played it before.
+    pub fn entry(&self, path: &Path) -> Option<&FileEntry> {
+        self.files.iter().find(|f| f.path == path)
+    }
+
+    /// Records progress for `path` and moves it to the front of the recent list.
+    pub fn touch(&mut self, path: &Path, title: &str, position: f64, duration: f64) {
+        let existing = self.files.iter().position(|f| f.path == path);
+        let mut entry = match existing {
+            Some(i) => self.files.remove(i),
+            None => FileEntry {
+                path: path.to_path_buf(),
+                bookmark: make_bookmark(path),
+                title: String::new(),
+                position: 0.0,
+                duration: 0.0,
+                last_played: 0,
+            },
+        };
+        entry.title = title.to_string();
+        entry.position = position;
+        entry.duration = duration;
+        entry.last_played = now();
+        self.files.insert(0, entry);
+        self.files.truncate(MAX_RECENT);
+    }
+
+    /// Updates a moved file's stored path so later lookups by path work.
+    pub fn relocate(&mut self, index: usize, new_path: PathBuf) {
+        if let Some(entry) = self.files.get_mut(index) {
+            entry.path = new_path;
+        }
+    }
+
+    pub fn remove(&mut self, index: usize) {
+        if index < self.files.len() {
+            self.files.remove(index);
+        }
+    }
+}
+
+fn file() -> PathBuf {
+    dirs::data_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("bgm-audio")
+        .join("state.json")
+}
+
+fn now() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+fn make_bookmark(path: &Path) -> Option<String> {
+    let url = NSURL::fileURLWithPath(&NSString::from_str(&path.to_string_lossy()));
+    let data = url
+        .bookmarkDataWithOptions_includingResourceValuesForKeys_relativeToURL_error(
+            NSURLBookmarkCreationOptions::empty(),
+            None,
+            None,
+        )
+        .ok()?;
+    Some(
+        data.base64EncodedStringWithOptions(NSDataBase64EncodingOptions::empty())
+            .to_string(),
+    )
+}
+
+fn resolve_bookmark(base64: &str) -> Option<PathBuf> {
+    let data = NSData::initWithBase64EncodedString_options(
+        NSData::alloc(),
+        &NSString::from_str(base64),
+        NSDataBase64DecodingOptions::empty(),
+    )?;
+    let mut stale = Bool::NO;
+    let url = unsafe {
+        NSURL::URLByResolvingBookmarkData_options_relativeToURL_bookmarkDataIsStale_error(
+            &data,
+            NSURLBookmarkResolutionOptions::WithoutUI,
+            None,
+            &mut stale,
+        )
+    }
+    .ok()?;
+    url.path().map(|p| PathBuf::from(p.to_string()))
+}
