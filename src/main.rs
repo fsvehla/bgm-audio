@@ -44,6 +44,12 @@ const RESUME_REWIND: f64 = 3.0;
 /// Wait this long after a microphone change before reacting, to ignore blips.
 const MIC_DEBOUNCE: Duration = Duration::from_millis(1500);
 const SAVE_EVERY_TICKS: u32 = 5;
+/// Wait this long after the window stops moving before saving its frame.
+const WINDOW_SAVE_DELAY: Duration = Duration::from_millis(500);
+const DEFAULT_WINDOW_SIZE: (f32, f32) = (440., 620.);
+/// Window height of the mini player (title bar inset, header, progress, controls).
+const COMPACT_HEIGHT: f32 = 236.;
+const MIN_WIDTH: f32 = 360.;
 
 /// Things that happen outside the UI: system remote commands, microphone changes.
 pub enum Event {
@@ -63,17 +69,21 @@ pub struct BgmApp {
     /// We paused because of the microphone, so we may resume when it stops.
     auto_paused: bool,
     mic_check: Option<Task<()>>,
+    window_save: Option<Task<()>>,
     error: Option<String>,
     focus: FocusHandle,
     bar_bounds: std::rc::Rc<std::cell::Cell<Bounds<Pixels>>>,
     volume_bounds: std::rc::Rc<std::cell::Cell<Bounds<Pixels>>>,
     ticks: u32,
+    /// Position changed since the file was opened (played or seeked). Until then
+    /// we keep the saved position, so the resume rewind doesn't pile up.
+    moved: bool,
     _tasks: Vec<Task<()>>,
     _subscriptions: Vec<gpui::Subscription>,
 }
 
 impl BgmApp {
-    fn new(open_path: Option<PathBuf>, cx: &mut Context<Self>) -> Self {
+    fn new(state: State, open_path: Option<PathBuf>, cx: &mut Context<Self>) -> Self {
         let (tx, mut rx) = futures::channel::mpsc::unbounded::<Event>();
         now_playing::register(tx.clone());
 
@@ -94,12 +104,13 @@ impl BgmApp {
         });
         let quit = cx.on_app_quit(|this, _| {
             this.record();
+            this.state.save();
             now_playing::clear();
             async {}
         });
 
         let mut app = Self {
-            state: State::load(),
+            state,
             player: None,
             artwork_np: None,
             artwork_ui: None,
@@ -108,11 +119,13 @@ impl BgmApp {
             mic_app: None,
             auto_paused: false,
             mic_check: None,
+            window_save: None,
             error: None,
             focus: cx.focus_handle(),
             bar_bounds: Default::default(),
             volume_bounds: Default::default(),
             ticks: 0,
+            moved: false,
             _tasks: vec![events, ticker],
             _subscriptions: vec![quit],
         };
@@ -155,10 +168,8 @@ impl BgmApp {
         self.error = None;
         player.set_volume(self.state.volume);
 
-        let resume = self
-            .state
-            .entry(path)
-            .map(|e| e.position)
+        let saved = self.state.entry(path).map_or(0.0, |e| e.position);
+        let resume = Some(saved)
             .filter(|&p| p < player.track.duration - 5.0)
             .map(|p| (p - RESUME_REWIND).max(0.0))
             .unwrap_or(0.0);
@@ -174,8 +185,9 @@ impl BgmApp {
         });
         self.chapter = track.chapter_at(resume);
         now_playing::use_chapter_buttons(!track.chapters.is_empty());
-        self.state.touch(path, &track.title, resume, track.duration);
+        self.state.touch(path, &track.title, saved, track.duration);
         self.state.save();
+        self.moved = false;
 
         if autoplay {
             player.play();
@@ -234,6 +246,7 @@ impl BgmApp {
     pub fn play(&mut self, cx: &mut Context<Self>) {
         let Some(player) = &self.player else { return };
         player.play();
+        self.moved = true;
         self.auto_paused = false;
         self.publish(None, true);
         cx.notify();
@@ -262,6 +275,7 @@ impl BgmApp {
         player.seek(seconds);
         self.chapter = player.track.chapter_at(seconds);
         let playing = player.is_playing();
+        self.moved = true;
         self.record_at(seconds);
         self.publish(Some(seconds), playing);
         cx.notify();
@@ -309,6 +323,45 @@ impl BgmApp {
             player.set_volume(self.state.volume);
         }
         self.state.save();
+        cx.notify();
+    }
+
+    /// Remembers the window frame; saved once the window stops moving.
+    fn window_changed(&mut self, window: &mut gpui::Window, cx: &mut Context<Self>) {
+        let (mode, bounds) = match window.window_bounds() {
+            WindowBounds::Windowed(b) => (state::WindowMode::Windowed, b),
+            WindowBounds::Maximized(b) => (state::WindowMode::Maximized, b),
+            WindowBounds::Fullscreen(b) => (state::WindowMode::Fullscreen, b),
+        };
+        let saved = state::SavedWindow {
+            x: bounds.origin.x.into(),
+            y: bounds.origin.y.into(),
+            width: bounds.size.width.into(),
+            height: bounds.size.height.into(),
+            mode,
+        };
+        if self.state.window == Some(saved) {
+            return;
+        }
+        self.state.window = Some(saved);
+        self.window_save = Some(cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(WINDOW_SAVE_DELAY).await;
+            this.update(cx, |this, _| this.state.save()).ok();
+        }));
+    }
+
+    /// Switches between the full window and the mini player, resizing the window.
+    pub fn toggle_compact(&mut self, window: &mut gpui::Window, cx: &mut Context<Self>) {
+        let current = window.viewport_size();
+        let height = if self.state.compact {
+            self.state.expanded_height.unwrap_or(DEFAULT_WINDOW_SIZE.1)
+        } else {
+            self.state.expanded_height = Some(current.height.into());
+            COMPACT_HEIGHT
+        };
+        self.state.compact = !self.state.compact;
+        self.state.save();
+        window.resize(size(current.width, px(height)));
         cx.notify();
     }
 
@@ -405,6 +458,9 @@ impl BgmApp {
 
     /// Saves the current file's position.
     fn record(&mut self) {
+        if !self.moved {
+            return;
+        }
         if let Some(position) = self.player.as_ref().map(|p| p.position()) {
             self.record_at(position);
         }
@@ -449,6 +505,28 @@ fn image_format(bytes: &[u8]) -> Option<ImageFormat> {
     }
 }
 
+/// The saved window frame if its title bar is still on a connected display,
+/// otherwise a centered window of the default size.
+fn restored_window_bounds(state: &State, cx: &App) -> WindowBounds {
+    if let Some(w) = state.window {
+        let bounds = Bounds::new(
+            gpui::point(px(w.x), px(w.y)),
+            size(px(w.width), px(w.height)),
+        );
+        // A point inside the title bar, so the window can always be dragged.
+        let grab = gpui::point(bounds.origin.x + px(60.), bounds.origin.y + px(12.));
+        if cx.displays().iter().any(|d| d.bounds().contains(&grab)) {
+            return match w.mode {
+                state::WindowMode::Windowed => WindowBounds::Windowed(bounds),
+                state::WindowMode::Maximized => WindowBounds::Maximized(bounds),
+                state::WindowMode::Fullscreen => WindowBounds::Fullscreen(bounds),
+            };
+        }
+    }
+    let (width, height) = DEFAULT_WINDOW_SIZE;
+    WindowBounds::Windowed(Bounds::centered(None, size(px(width), px(height)), cx))
+}
+
 fn main() {
     let open_path = std::env::args_os().nth(1).map(PathBuf::from);
 
@@ -490,11 +568,12 @@ fn main() {
             },
         ]);
 
-        let bounds = Bounds::centered(None, size(px(440.), px(620.)), cx);
+        let state = State::load();
+        let window_bounds = restored_window_bounds(&state, cx);
         cx.open_window(
             WindowOptions {
-                window_bounds: Some(WindowBounds::Windowed(bounds)),
-                window_min_size: Some(size(px(360.), px(320.))),
+                window_bounds: Some(window_bounds),
+                window_min_size: Some(size(px(MIN_WIDTH), px(COMPACT_HEIGHT))),
                 titlebar: Some(gpui::TitlebarOptions {
                     title: Some("bgm-audio".into()),
                     appears_transparent: true,
@@ -503,7 +582,14 @@ fn main() {
                 ..Default::default()
             },
             |window, cx| {
-                let view = cx.new(|cx| BgmApp::new(open_path.clone(), cx));
+                let view = cx.new(|cx| {
+                    let mut app = BgmApp::new(state, open_path.clone(), cx);
+                    let observer = cx.observe_window_bounds(window, |this, window, cx| {
+                        this.window_changed(window, cx)
+                    });
+                    app._subscriptions.push(observer);
+                    app
+                });
                 window.focus(&view.read(cx).focus.clone());
                 view
             },

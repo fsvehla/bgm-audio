@@ -26,6 +26,12 @@ pub struct State {
     pub mic_auto_pause: bool,
     /// Which list the window shows under the player.
     pub tab: Tab,
+    /// Last window frame, restored on launch if it is still on a display.
+    pub window: Option<SavedWindow>,
+    /// Mini player: only artwork, title, progress bar and controls.
+    pub compact: bool,
+    /// Window height to return to when leaving the mini player.
+    pub expanded_height: Option<f32>,
     /// Most recently played first. The first entry is the session to restore.
     pub files: Vec<FileEntry>,
 }
@@ -38,6 +44,9 @@ impl Default for State {
             looping: true,
             mic_auto_pause: true,
             tab: Tab::Chapters,
+            window: None,
+            compact: false,
+            expanded_height: None,
             files: Vec::new(),
         }
     }
@@ -49,6 +58,25 @@ pub enum Tab {
     #[default]
     Chapters,
     Recent,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq)]
+pub struct SavedWindow {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+    #[serde(default)]
+    pub mode: WindowMode,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum WindowMode {
+    #[default]
+    Windowed,
+    Maximized,
+    Fullscreen,
 }
 
 #[derive(Serialize, Deserialize, Clone)]

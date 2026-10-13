@@ -23,6 +23,8 @@ Next
 - [x] Mic: ignore com.apple.avconferenced (holds the mic during Remote Control)
 - [x] Now Playing: prev/next chapter buttons when the file has chapters, else ±10 s
 - [x] Chapters | Recent tabs (remembered); Recent shows progress, "x min ago", ×
+- [x] Window frame restore (falls back to centered when off-screen)
+- [x] Mini player toggle (chevron next to the controls), remembered
 - [ ] File associations in Info.plist ("Open With") + on_open_urls handling
 - [ ] App icon
 - [ ] Menu bar extra instead of / in addition to the window?

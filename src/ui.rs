@@ -60,7 +60,7 @@ impl Render for BgmApp {
             .when_some(self.error.clone(), |el, error| {
                 el.child(div().text_xs().text_color(rgb(WARN)).child(error))
             })
-            .child(self.render_lists(cx))
+            .when(!self.state.compact, |el| el.child(self.render_lists(cx)))
     }
 }
 
@@ -204,10 +204,30 @@ impl BgmApp {
             .child(format!("-{}", format_time(track.duration - position)));
 
         let has_chapters = !track.chapters.is_empty();
+        let compact = self.state.compact;
         let controls = div()
+            .relative()
             .flex()
             .gap_2()
             .justify_center()
+            .child(
+                div()
+                    .id("compact")
+                    .absolute()
+                    .right_0()
+                    .top_0()
+                    .bottom_0()
+                    .flex()
+                    .items_center()
+                    .px_2()
+                    .rounded_md()
+                    .text_color(rgb(MUTED))
+                    .hover(|s| s.text_color(rgb(TEXT)).bg(rgb(PANEL)))
+                    .cursor_pointer()
+                    .text_lg()
+                    .child(if compact { "⌄" } else { "⌃" })
+                    .on_click(cx.listener(|this, _, window, cx| this.toggle_compact(window, cx))),
+            )
             .when(has_chapters, |el| {
                 el.child(
                     button("prev", "⏮")
@@ -309,7 +329,7 @@ impl BgmApp {
             .child(header)
             .child(div().flex().flex_col().gap_1().child(bar).child(times))
             .child(controls)
-            .child(options)
+            .when(!compact, |el| el.child(options))
             .into_any_element()
     }
 
