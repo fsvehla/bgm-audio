@@ -25,6 +25,8 @@ Next
 - [x] Chapters | Recent tabs (remembered); Recent shows progress, "x min ago", ×
 - [x] Window frame restore (falls back to centered when off-screen)
 - [x] Mini player toggle (chevron next to the controls), remembered
+- [x] Developer ID signing (hardened runtime) in bundle.sh; NOTARIZE=1 for notarization
+- [x] Notarization: NOTARIZE=1 packaging/bundle.sh (keychain profile "notary")
 - [ ] File associations in Info.plist ("Open With") + on_open_urls handling
 - [ ] App icon
 - [ ] Menu bar extra instead of / in addition to the window?
