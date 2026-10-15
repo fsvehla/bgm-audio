@@ -460,6 +460,7 @@ dependencies = [
  "dirs 6.0.0",
  "futures",
  "gpui-component",
+ "gpui-kit-assets",
  "gpui-pre",
  "gpui-pre-platform",
  "objc2 0.6.5",

@@ -10,7 +10,7 @@ use gpui_component::scroll::ScrollableElement;
 use gpui_component::slider::Slider;
 use gpui_component::switch::Switch;
 use gpui_component::tab::{Tab as TabItem, TabBar};
-use gpui_component::{Sizable, StyledExt};
+use gpui_component::{IconName, Sizable, StyledExt};
 
 use crate::state::{Appearance, Tab};
 use crate::theme::{Palette, palette};
@@ -209,7 +209,11 @@ impl BgmApp {
                     .child(
                         Button::new("compact")
                             .ghost()
-                            .label(if compact { "⌄" } else { "⌃" })
+                            .icon(if compact {
+                                IconName::ChevronDown
+                            } else {
+                                IconName::ChevronUp
+                            })
                             .text_color(p.muted)
                             .tooltip(if compact {
                                 "Show everything"

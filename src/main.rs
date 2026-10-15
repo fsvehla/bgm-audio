@@ -694,7 +694,7 @@ fn main() {
     let (tx, rx) = futures::channel::mpsc::unbounded::<Event>();
     let events = Rc::new(RefCell::new(Some((tx.clone(), rx))));
 
-    let app = gpui_platform::application();
+    let app = gpui_platform::application().with_assets(gpui_kit_assets::Assets);
     app.on_open_urls(move |urls| {
         for path in urls.iter().filter_map(|url| file_url_path(url)) {
             tx.unbounded_send(Event::OpenFile(path)).ok();
