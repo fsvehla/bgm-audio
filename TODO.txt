@@ -27,7 +27,7 @@ Next
 - [x] Mini player toggle (chevron next to the controls), remembered
 - [x] Developer ID signing (hardened runtime) in bundle.sh; NOTARIZE=1 for notarization
 - [x] Notarization: NOTARIZE=1 packaging/bundle.sh (keychain profile "notary")
-- [ ] File associations in Info.plist ("Open With") + on_open_urls handling
+- [x] File associations in Info.plist ("Open With", Dock drop; rank Alternate) + on_open_urls handling
 - [x] App icon
 - [x] App menu: Services, Hide (cmd-h), Hide Others (alt-cmd-h), Show All
 - [x] Volume: gpui-component Slider (click + drag), saved 300 ms after it settles

@@ -6,11 +6,14 @@ mod theme;
 mod ui;
 mod updater;
 
+use std::cell::RefCell;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
 use futures::StreamExt;
+use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use gpui::{
     App, AppContext, Bounds, Context, Entity, FocusHandle, Image, ImageFormat, KeyBinding, Menu,
     MenuItem, PathPromptOptions, SystemMenuType, Task, Window, WindowBounds, WindowOptions,
@@ -19,6 +22,7 @@ use gpui::{
 use gpui_component::slider::{SliderEvent, SliderState};
 use objc2::MainThreadMarker;
 use objc2::rc::Retained;
+use objc2_foundation::{NSString, NSURL};
 use objc2_media_player::MPMediaItemArtwork;
 
 use mic::MicWatcher;
@@ -70,6 +74,8 @@ pub enum Event {
     MicChanged,
     /// The accent colour changed in System Settings.
     SystemColorsChanged,
+    /// A file opened from Finder ("Open With", double-click, drop on the Dock icon).
+    OpenFile(PathBuf),
 }
 
 pub struct BgmApp {
@@ -102,8 +108,12 @@ pub struct BgmApp {
 }
 
 impl BgmApp {
-    fn new(state: State, open_path: Option<PathBuf>, cx: &mut Context<Self>) -> Self {
-        let (tx, mut rx) = futures::channel::mpsc::unbounded::<Event>();
+    fn new(
+        state: State,
+        open_path: Option<PathBuf>,
+        (tx, mut rx): (UnboundedSender<Event>, UnboundedReceiver<Event>),
+        cx: &mut Context<Self>,
+    ) -> Self {
         now_playing::register(tx.clone());
         theme::watch_accent(tx.clone());
 
@@ -467,6 +477,10 @@ impl BgmApp {
                 Remote::SkipBackward => self.skip(-SKIP_SECONDS, cx),
                 Remote::Seek(seconds) => self.seek(seconds, cx),
             },
+            Event::OpenFile(path) => {
+                self.open(&path, true, cx);
+                cx.activate(true);
+            }
             Event::SystemColorsChanged => {
                 theme::apply(cx.window_appearance(), cx);
                 cx.notify();
@@ -665,10 +679,28 @@ fn app_menus(appearance: state::Appearance, cx: &App) -> Vec<Menu> {
     ]
 }
 
+/// The local path of a `file://` URL from the system.
+fn file_url_path(url: &str) -> Option<PathBuf> {
+    let url = NSURL::URLWithString(&NSString::from_str(url))?;
+    if !url.isFileURL() {
+        return None;
+    }
+    Some(PathBuf::from(url.path()?.to_string()))
+}
+
 fn main() {
     let open_path = file_argument();
+    // Created before launch: macOS can deliver opened files before the window exists.
+    let (tx, rx) = futures::channel::mpsc::unbounded::<Event>();
+    let events = Rc::new(RefCell::new(Some((tx.clone(), rx))));
 
-    gpui_platform::application().run(move |cx: &mut App| {
+    let app = gpui_platform::application();
+    app.on_open_urls(move |urls| {
+        for path in urls.iter().filter_map(|url| file_url_path(url)) {
+            tx.unbounded_send(Event::OpenFile(path)).ok();
+        }
+    });
+    app.run(move |cx: &mut App| {
         gpui_component::init(cx);
         theme::apply(cx.window_appearance(), cx);
         // gpui-component resets its theme from its registry once effects flush (and on
@@ -722,7 +754,8 @@ fn main() {
             },
             |window, cx| {
                 let view = cx.new(|cx| {
-                    let mut app = BgmApp::new(state, open_path.clone(), cx);
+                    let events = events.take().expect("one window");
+                    let mut app = BgmApp::new(state, open_path.clone(), events, cx);
                     let observer = cx.observe_window_bounds(window, |this, window, cx| {
                         this.window_changed(window, cx)
                     });

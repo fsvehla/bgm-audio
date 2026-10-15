@@ -33,8 +33,10 @@ Requires macOS 14.2. Updates through Sparkle (Ambience → Check for Updates…)
 
 ## Usage
 
-Open a file with ⌘O, by dropping it on the window, or by passing the path:
-`Ambience.app/Contents/MacOS/Ambience <file>`.
+Open a file with ⌘O, by dropping it on the window or the Dock icon, from
+Finder (Open With → Ambience), or by passing the path:
+`Ambience.app/Contents/MacOS/Ambience <file>`. Ambience does not become the
+default audio player; to make it one, use Get Info → Open with → Change All.
 
 | Key | |
 |---|---|

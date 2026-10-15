@@ -13,6 +13,18 @@
 	<key>NSHighResolutionCapable</key><true/>
 	<key>CFBundleIconFile</key><string>AppIcon</string>
 	<key>LSApplicationCategoryType</key><string>public.app-category.music</string>
+	<!-- Finder "Open With" and drops on the Dock icon. Alternate: never takes over
+	     as the default player unless chosen in Get Info → "Change All". -->
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key><string>Audio</string>
+			<key>CFBundleTypeRole</key><string>Viewer</string>
+			<key>LSHandlerRank</key><string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array><string>public.audio</string></array>
+		</dict>
+	</array>
 	<!-- Sparkle: each GitHub release carries an appcast.xml for itself (packaging/release.sh). -->
 	<key>SUFeedURL</key><string>https://github.com/fsvehla/bgm-audio/releases/latest/download/appcast.xml</string>
 	<key>SUPublicEDKey</key><string>bAS+Hld3ES4qPgSeef0qEpzvZY8+auSIBdoEMGoLHJY=</string>
