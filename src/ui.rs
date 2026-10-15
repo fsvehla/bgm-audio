@@ -71,7 +71,8 @@ impl Render for BgmApp {
             .text_sm()
             .flex()
             .flex_col()
-            .pt(px(40.))
+            // Room for the traffic lights under the transparent macOS title bar.
+            .pt(px(if cfg!(target_os = "macos") { 40. } else { 16. }))
             .px_4()
             .pb_4()
             .gap_4()

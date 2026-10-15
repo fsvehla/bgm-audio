@@ -62,7 +62,8 @@ const SAVE_EVERY_TICKS: u32 = 5;
 const WINDOW_SAVE_DELAY: Duration = Duration::from_millis(500);
 const DEFAULT_WINDOW_SIZE: (f32, f32) = (440., 620.);
 /// Window height of the mini player (title bar inset, header, progress, controls).
-const COMPACT_HEIGHT: f32 = 236.;
+/// The macOS content starts under the title bar; elsewhere the inset is 24 smaller.
+const COMPACT_HEIGHT: f32 = if cfg!(target_os = "macos") { 236. } else { 212. };
 /// Fits the controls row: transport buttons (with chapter buttons) plus the mini
 /// player toggle on each side's column, gaps and window padding.
 const MIN_WIDTH: f32 = 392.;
@@ -735,11 +736,10 @@ fn main() {
             theme::apply(cx.window_appearance(), cx)
         })
         .detach();
+        // "secondary" is ⌘ on macOS and Ctrl elsewhere.
         cx.bind_keys([
-            KeyBinding::new("cmd-q", Quit, None),
-            KeyBinding::new("cmd-h", Hide, None),
-            KeyBinding::new("alt-cmd-h", HideOthers, None),
-            KeyBinding::new("cmd-o", Open, None),
+            KeyBinding::new("secondary-q", Quit, None),
+            KeyBinding::new("secondary-o", Open, None),
             KeyBinding::new("space", TogglePlay, None),
             KeyBinding::new("left", SkipBack, None),
             KeyBinding::new("right", SkipForward, None),
@@ -747,8 +747,14 @@ fn main() {
             KeyBinding::new("shift-right", NextChapter, None),
             KeyBinding::new("up", VolumeUp, None),
             KeyBinding::new("down", VolumeDown, None),
+            KeyBinding::new("secondary-shift-m", ToggleMiniPlayer, None),
+        ]);
+        // macOS conventions without a Windows equivalent.
+        #[cfg(target_os = "macos")]
+        cx.bind_keys([
+            KeyBinding::new("cmd-h", Hide, None),
+            KeyBinding::new("alt-cmd-h", HideOthers, None),
             KeyBinding::new("cmd-m", Minimize, None),
-            KeyBinding::new("cmd-shift-m", ToggleMiniPlayer, None),
         ]);
         cx.on_action(|_: &Quit, cx| cx.quit());
         // GPUI has no standard app menu; these mirror what Zed wires up by hand.
@@ -776,7 +782,9 @@ fn main() {
                 window_min_size: Some(size(px(MIN_WIDTH), px(COMPACT_HEIGHT))),
                 titlebar: Some(gpui::TitlebarOptions {
                     title: Some(APP_NAME.into()),
-                    appears_transparent: true,
+                    // macOS: content runs under the title bar, traffic lights inset
+                    // (ui.rs leaves room for them). Elsewhere: the system title bar.
+                    appears_transparent: cfg!(target_os = "macos"),
                     traffic_light_position: Some(gpui::point(px(12.), px(12.))),
                 }),
                 ..Default::default()
