@@ -31,4 +31,6 @@ Next
 - [x] App icon
 - [x] App menu: Services, Hide (cmd-h), Hide Others (alt-cmd-h), Show All
 - [x] Volume: gpui-component Slider (click + drag), saved 300 ms after it settles
+- [x] UI on gpui-component (Button, Switch, TabBar, Slider, scrollbar); progress bar drags to scrub
+- [x] Colours follow the system: light/dark appearance + accent colour (live)
 - [ ] Menu bar extra instead of / in addition to the window?

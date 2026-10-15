@@ -2,6 +2,7 @@ mod mic;
 mod now_playing;
 mod player;
 mod state;
+mod theme;
 mod ui;
 
 use std::path::{Path, PathBuf};
@@ -11,8 +12,8 @@ use std::time::Duration;
 use futures::StreamExt;
 use gpui::{
     App, AppContext, Application, Bounds, Context, Entity, FocusHandle, Image, ImageFormat,
-    KeyBinding, Menu, MenuItem, PathPromptOptions, Pixels, SystemMenuType, Task, Window,
-    WindowBounds, WindowOptions, actions, px, size,
+    KeyBinding, Menu, MenuItem, PathPromptOptions, SystemMenuType, Task, Window, WindowBounds,
+    WindowOptions, actions, px, size,
 };
 use gpui_component::slider::{SliderEvent, SliderState};
 use objc2::MainThreadMarker;
@@ -59,6 +60,8 @@ const MIN_WIDTH: f32 = 360.;
 pub enum Event {
     Remote(Remote),
     MicChanged,
+    /// The accent colour changed in System Settings.
+    SystemColorsChanged,
 }
 
 pub struct BgmApp {
@@ -76,8 +79,11 @@ pub struct BgmApp {
     window_save: Option<Task<()>>,
     error: Option<String>,
     focus: FocusHandle,
-    bar_bounds: std::rc::Rc<std::cell::Cell<Bounds<Pixels>>>,
     volume_slider: Entity<SliderState>,
+    /// Progress bar as a slider (0..1 of the duration), for drag-to-scrub.
+    progress_slider: Entity<SliderState>,
+    /// Last scrub; the bar isn't synced to the player right after, so it doesn't jump back.
+    scrubbed_at: Option<std::time::Instant>,
     volume_save: Option<Task<()>>,
     ticks: u32,
     /// Position changed since the file was opened (played or seeked). Until then
@@ -91,6 +97,7 @@ impl BgmApp {
     fn new(state: State, open_path: Option<PathBuf>, cx: &mut Context<Self>) -> Self {
         let (tx, mut rx) = futures::channel::mpsc::unbounded::<Event>();
         now_playing::register(tx.clone());
+        theme::watch_accent(tx.clone());
 
         let events = cx.spawn(async move |this, cx| {
             while let Some(event) = rx.next().await {
@@ -126,6 +133,16 @@ impl BgmApp {
             this.apply_volume(value.end(), cx);
         });
 
+        let progress_slider = cx.new(|_| SliderState::new().min(0.0).max(1.0).step(0.0001));
+        let scrubbed = cx.subscribe(&progress_slider, |this, _, event: &SliderEvent, cx| {
+            let SliderEvent::Change(value) = event;
+            let Some(duration) = this.player.as_ref().map(|p| p.track.duration) else {
+                return;
+            };
+            this.scrubbed_at = Some(std::time::Instant::now());
+            this.seek(value.end() as f64 * duration, cx);
+        });
+
         let mut app = Self {
             state,
             player: None,
@@ -139,13 +156,14 @@ impl BgmApp {
             window_save: None,
             error: None,
             focus: cx.focus_handle(),
-            bar_bounds: Default::default(),
             volume_slider,
+            progress_slider,
+            scrubbed_at: None,
             volume_save: None,
             ticks: 0,
             moved: false,
             _tasks: vec![events, ticker],
-            _subscriptions: vec![quit, volume_changed],
+            _subscriptions: vec![quit, volume_changed, scrubbed],
         };
 
         // Restore the last session (paused), unless a file was passed on the command line.
@@ -431,6 +449,10 @@ impl BgmApp {
                 Remote::SkipBackward => self.skip(-SKIP_SECONDS, cx),
                 Remote::Seek(seconds) => self.seek(seconds, cx),
             },
+            Event::SystemColorsChanged => {
+                theme::apply(cx.window_appearance(), cx);
+                cx.notify();
+            }
             Event::MicChanged => {
                 self.mic.sync();
                 self.mic_check = Some(cx.spawn(async move |this, cx| {
@@ -539,6 +561,20 @@ fn image_format(bytes: &[u8]) -> Option<ImageFormat> {
 
 /// The saved window frame if its title bar is still on a connected display,
 /// otherwise a centered window of the default size.
+/// The file to open from the command line. Skips Cocoa's `-Key value` user-default
+/// overrides (e.g. `-AppleInterfaceStyle Dark`), which AppKit reads on its own.
+fn file_argument() -> Option<PathBuf> {
+    let mut args = std::env::args_os().skip(1);
+    while let Some(arg) = args.next() {
+        if arg.to_string_lossy().starts_with('-') {
+            args.next();
+        } else {
+            return Some(PathBuf::from(arg));
+        }
+    }
+    None
+}
+
 fn restored_window_bounds(state: &State, cx: &App) -> WindowBounds {
     if let Some(w) = state.window {
         let bounds = Bounds::new(
@@ -560,10 +596,17 @@ fn restored_window_bounds(state: &State, cx: &App) -> WindowBounds {
 }
 
 fn main() {
-    let open_path = std::env::args_os().nth(1).map(PathBuf::from);
+    let open_path = file_argument();
 
     Application::new().run(move |cx: &mut App| {
         gpui_component::init(cx);
+        theme::apply(cx.window_appearance(), cx);
+        // gpui-component resets its theme from its registry once effects flush (and on
+        // registry changes); registered after theirs, this puts our palette back on top.
+        cx.observe_global::<gpui_component::ThemeRegistry>(|cx| {
+            theme::apply(cx.window_appearance(), cx)
+        })
+        .detach();
         cx.bind_keys([
             KeyBinding::new("cmd-q", Quit, None),
             KeyBinding::new("cmd-h", Hide, None),
@@ -635,6 +678,11 @@ fn main() {
                         this.window_changed(window, cx)
                     });
                     app._subscriptions.push(observer);
+                    let appearance = cx.observe_window_appearance(window, |_, window, cx| {
+                        theme::apply(window.appearance(), cx);
+                        cx.notify();
+                    });
+                    app._subscriptions.push(appearance);
                     app
                 });
                 window.focus(&view.read(cx).focus.clone());

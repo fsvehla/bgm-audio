@@ -1,33 +1,30 @@
 //! The window's contents.
 
-use std::cell::Cell;
-use std::rc::Rc;
-
 use gpui::{
-    AnyElement, Bounds, Context, ExternalPaths, FontWeight, Hsla, InteractiveElement, IntoElement,
-    MouseButton, MouseDownEvent, ParentElement, Pixels, Render, SharedString, Stateful,
-    StatefulInteractiveElement, Styled, Window, canvas, div, img, prelude::*, px, relative, rgb,
-    rgba,
+    AnyElement, Context, ExternalPaths, FontWeight, InteractiveElement, IntoElement, ParentElement,
+    Render, SharedString, StatefulInteractiveElement, Styled, Window, div, img, prelude::*, px,
+    relative,
 };
-
+use gpui_component::button::{Button, ButtonVariants};
+use gpui_component::scroll::ScrollableElement;
 use gpui_component::slider::Slider;
+use gpui_component::switch::Switch;
+use gpui_component::tab::{Tab as TabItem, TabBar};
+use gpui_component::{Sizable, StyledExt};
 
 use crate::state::Tab;
+use crate::theme::{Palette, palette};
 use crate::{
     BgmApp, NextChapter, Open, PrevChapter, SKIP_SECONDS, SkipBack, SkipForward, TogglePlay,
     VolumeDown, VolumeUp,
 };
 
-const BG: u32 = 0x15181b;
-const PANEL: u32 = 0x1c1f25;
-const PANEL_HOVER: u32 = 0x272b33;
-const TEXT: u32 = 0xe8e6e1;
-const MUTED: u32 = 0x8b9099;
-const ACCENT: u32 = 0x8fc0a0;
-const WARN: u32 = 0xe5786d;
+/// Don't pull the progress bar back to the player position this soon after a scrub.
+const SCRUB_SETTLE: std::time::Duration = std::time::Duration::from_millis(600);
 
 impl Render for BgmApp {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let p = palette(cx);
         div()
             .id("root")
             .track_focus(&self.focus)
@@ -49,8 +46,8 @@ impl Render for BgmApp {
                 }
             }))
             .size_full()
-            .bg(rgb(BG))
-            .text_color(rgb(TEXT))
+            .bg(p.bg)
+            .text_color(p.text)
             .text_sm()
             .flex()
             .flex_col()
@@ -58,16 +55,17 @@ impl Render for BgmApp {
             .px_4()
             .pb_4()
             .gap_4()
-            .child(self.render_now_playing(cx))
+            .child(self.render_now_playing(window, cx))
             .when_some(self.error.clone(), |el, error| {
-                el.child(div().text_xs().text_color(rgb(WARN)).child(error))
+                el.child(div().text_xs().text_color(p.warn).child(error))
             })
             .when(!self.state.compact, |el| el.child(self.render_lists(cx)))
     }
 }
 
 impl BgmApp {
-    fn render_now_playing(&mut self, cx: &mut Context<Self>) -> AnyElement {
+    fn render_now_playing(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        let p = palette(cx);
         let Some(player) = &self.player else {
             return div()
                 .flex()
@@ -79,11 +77,12 @@ impl BgmApp {
                 .rounded_lg()
                 .border_1()
                 .border_dashed()
-                .border_color(rgb(PANEL_HOVER))
-                .text_color(rgb(MUTED))
+                .border_color(p.panel_hover)
+                .text_color(p.muted)
                 .child("Drop an audio file here")
                 .child(
-                    button("open", "Open…")
+                    Button::new("open")
+                        .label("Open…")
                         .on_click(cx.listener(|this, _, _, cx| this.prompt_open(cx))),
                 )
                 .into_any_element();
@@ -107,7 +106,7 @@ impl BgmApp {
             None => div()
                 .size(px(84.))
                 .rounded_md()
-                .bg(rgb(PANEL))
+                .bg(p.panel)
                 .into_any_element(),
         };
 
@@ -128,22 +127,26 @@ impl BgmApp {
                         )),
                 )
                 .when_some(subtitle.filter(|_| self.chapter.is_none()), |el, s| {
-                    el.child(div().text_xs().text_color(rgb(MUTED)).child(s))
+                    el.child(div().text_xs().text_color(p.muted).child(s))
                 })
                 .when(self.chapter.is_some(), |el| {
                     el.child(
                         div()
                             .text_xs()
-                            .text_color(rgb(MUTED))
+                            .text_color(p.muted)
                             .line_clamp(1)
                             .child(SharedString::from(track.title.clone())),
                     )
                 }),
         );
 
-        // Progress bar: click anywhere to seek. A canvas records the bar's bounds.
+        // Progress bar: a slider (click to seek, drag to scrub) with chapter marks on top.
         let fraction = (position / track.duration).clamp(0.0, 1.0) as f32;
-        let bar_bounds = self.bar_bounds.clone();
+        let settled = self.scrubbed_at.is_none_or(|t| t.elapsed() > SCRUB_SETTLE);
+        if settled && (self.progress_slider.read(cx).value().end() - fraction).abs() > 0.0001 {
+            self.progress_slider
+                .update(cx, |slider, cx| slider.set_value(fraction, window, cx));
+        }
         let markers: Vec<f32> = track
             .chapters
             .iter()
@@ -151,57 +154,29 @@ impl BgmApp {
             .map(|c| (c.start / track.duration) as f32)
             .collect();
         let bar = div()
-            .id("bar")
             .relative()
-            .h(px(14.))
             .w_full()
-            .flex()
-            .items_center()
-            .cursor_pointer()
+            .child(Slider::new(&self.progress_slider).bg(p.accent))
             .child(
                 div()
-                    .relative()
-                    .h(px(6.))
-                    .w_full()
-                    .rounded_full()
-                    .bg(rgb(PANEL_HOVER))
-                    .child(
+                    .absolute()
+                    .inset_0()
+                    .children(markers.into_iter().map(move |m| {
                         div()
                             .absolute()
-                            .top_0()
-                            .left_0()
-                            .h_full()
-                            .w(relative(fraction))
-                            .rounded_full()
-                            .bg(rgb(ACCENT)),
-                    )
-                    .children(markers.into_iter().map(|m| {
-                        div()
-                            .absolute()
-                            .top_0()
+                            .top(px(9.))
                             .left(relative(m))
-                            .h_full()
+                            .h(px(6.))
                             .w(px(2.))
-                            .bg(rgba(0x13151999))
+                            .bg(p.marker)
                     })),
-            )
-            .child(record_bounds(bar_bounds))
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|this, event: &MouseDownEvent, _, cx| {
-                    let Some(duration) = this.player.as_ref().map(|p| p.track.duration) else {
-                        return;
-                    };
-                    let f = fraction_in(this.bar_bounds.get(), event.position.x);
-                    this.seek(f as f64 * duration, cx);
-                }),
             );
 
         let times = div()
             .flex()
             .justify_between()
             .text_xs()
-            .text_color(rgb(MUTED))
+            .text_color(p.muted)
             .child(format_time(position))
             .child(format!("-{}", format_time(track.duration - position)));
 
@@ -214,44 +189,70 @@ impl BgmApp {
             .justify_center()
             .child(
                 div()
-                    .id("compact")
                     .absolute()
                     .right_0()
                     .top_0()
                     .bottom_0()
                     .flex()
                     .items_center()
-                    .px_2()
-                    .rounded_md()
-                    .text_color(rgb(MUTED))
-                    .hover(|s| s.text_color(rgb(TEXT)).bg(rgb(PANEL)))
-                    .cursor_pointer()
-                    .text_lg()
-                    .child(if compact { "⌄" } else { "⌃" })
-                    .on_click(cx.listener(|this, _, window, cx| this.toggle_compact(window, cx))),
+                    .child(
+                        Button::new("compact")
+                            .ghost()
+                            .label(if compact { "⌄" } else { "⌃" })
+                            .text_color(p.muted)
+                            .tooltip(if compact {
+                                "Show everything"
+                            } else {
+                                "Mini player"
+                            })
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.toggle_compact(window, cx)),
+                            ),
+                    ),
             )
             .when(has_chapters, |el| {
                 el.child(
-                    button("prev", "⏮")
+                    Button::new("prev")
+                        .small()
+                        .h_8()
+                        .label("⏮")
+                        .tooltip("Previous chapter")
                         .on_click(cx.listener(|this, _, _, cx| this.prev_chapter(cx))),
                 )
             })
             .child(
-                button("back", "−10s")
+                Button::new("back")
+                    .small()
+                    .h_8()
+                    .label("−10s")
                     .on_click(cx.listener(|this, _, _, cx| this.skip(-SKIP_SECONDS, cx))),
             )
             .child(
-                primary_button("play", if playing { "Pause" } else { "Play" })
+                Button::new("play")
+                    .small()
+                    .h_8()
+                    .primary()
+                    .label(if playing { "Pause" } else { "Play" })
+                    // Setting any text style on a Button replaces its colour too; set both.
+                    .text_color(p.on_accent)
+                    .font_semibold()
                     .w(px(88.))
                     .on_click(cx.listener(|this, _, _, cx| this.toggle(cx))),
             )
             .child(
-                button("fwd", "+10s")
+                Button::new("fwd")
+                    .small()
+                    .h_8()
+                    .label("+10s")
                     .on_click(cx.listener(|this, _, _, cx| this.skip(SKIP_SECONDS, cx))),
             )
             .when(has_chapters, |el| {
                 el.child(
-                    button("next", "⏭")
+                    Button::new("next")
+                        .small()
+                        .h_8()
+                        .label("⏭")
+                        .tooltip("Next chapter")
                         .on_click(cx.listener(|this, _, _, cx| this.next_chapter(cx))),
                 )
             });
@@ -263,14 +264,12 @@ impl BgmApp {
             .items_center()
             .gap_2()
             .text_xs()
-            .text_color(rgb(MUTED))
+            .text_color(p.muted)
             .child("Vol")
             .child(
-                div().w(px(90.)).child(
-                    Slider::new(&self.volume_slider)
-                        .bg(rgb(MUTED))
-                        .text_color(rgb(TEXT)),
-                ),
+                div()
+                    .w(px(90.))
+                    .child(Slider::new(&self.volume_slider).bg(p.muted)),
             );
 
         let mic_label: SharedString = match (&self.mic_app, self.auto_paused) {
@@ -287,14 +286,23 @@ impl BgmApp {
             .child(
                 div()
                     .flex()
-                    .gap_2()
+                    .gap_4()
+                    .text_xs()
                     .child(
-                        toggle("loop", "Loop", self.state.looping)
-                            .on_click(cx.listener(|this, _, _, cx| this.toggle_loop(cx))),
+                        Switch::new("loop")
+                            .small()
+                            .label("Loop")
+                            .checked(self.state.looping)
+                            .on_click(cx.listener(|this, _: &bool, _, cx| this.toggle_loop(cx))),
                     )
                     .child(
-                        toggle("mic", mic_label, self.state.mic_auto_pause)
-                            .on_click(cx.listener(|this, _, _, cx| this.toggle_mic_auto_pause(cx))),
+                        Switch::new("mic")
+                            .small()
+                            .label(mic_label)
+                            .checked(self.state.mic_auto_pause)
+                            .on_click(
+                                cx.listener(|this, _: &bool, _, cx| this.toggle_mic_auto_pause(cx)),
+                            ),
                     ),
             )
             .child(volume);
@@ -311,6 +319,7 @@ impl BgmApp {
     }
 
     fn render_lists(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        let p = palette(cx);
         let chapter_count = self.player.as_ref().map_or(0, |p| p.track.chapters.len());
         // Without chapters there is nothing to show on the Chapters tab.
         let tab = if chapter_count == 0 {
@@ -319,33 +328,30 @@ impl BgmApp {
             self.state.tab
         };
 
-        let tabs = div()
-            .flex()
-            .gap_1()
-            .p(px(3.))
-            .rounded_lg()
-            .bg(rgb(PANEL))
-            .text_xs()
-            .when(chapter_count > 0, |el| {
-                el.child(
-                    tab_button(
-                        "tab-chapters",
-                        "Chapters",
-                        chapter_count,
-                        tab == Tab::Chapters,
-                    )
-                    .on_click(cx.listener(|this, _, _, cx| this.set_tab(Tab::Chapters, cx))),
-                )
+        // Tab indices depend on whether the Chapters tab is shown.
+        let tabs_shown: Vec<Tab> = if chapter_count > 0 {
+            vec![Tab::Chapters, Tab::Recent]
+        } else {
+            vec![Tab::Recent]
+        };
+        let count = |n: usize| div().ml_1p5().text_color(p.muted).child(n.to_string());
+        let tabs = TabBar::new("tabs")
+            .segmented()
+            .small()
+            .selected_index(tabs_shown.iter().position(|t| *t == tab).unwrap_or(0))
+            .when(chapter_count > 0, |bar| {
+                bar.child(TabItem::new().label("Chapters").child(count(chapter_count)))
             })
             .child(
-                tab_button(
-                    "tab-recent",
-                    "Recent",
-                    self.state.files.len(),
-                    tab == Tab::Recent,
-                )
-                .on_click(cx.listener(|this, _, _, cx| this.set_tab(Tab::Recent, cx))),
-            );
+                TabItem::new()
+                    .label("Recent")
+                    .child(count(self.state.files.len())),
+            )
+            .on_click(cx.listener(move |this, ix: &usize, _, cx| {
+                if let Some(tab) = tabs_shown.get(*ix) {
+                    this.set_tab(*tab, cx)
+                }
+            }));
 
         let list = match tab {
             Tab::Chapters => self.render_chapters(cx),
@@ -359,11 +365,12 @@ impl BgmApp {
             .flex_col()
             .gap_2()
             .child(div().flex().child(tabs))
-            .child(list)
+            .child(list.overflow_y_scrollbar())
             .into_any_element()
     }
 
-    fn render_chapters(&mut self, cx: &mut Context<Self>) -> Stateful<gpui::Div> {
+    fn render_chapters(&mut self, cx: &mut Context<Self>) -> gpui::Stateful<gpui::Div> {
+        let p = palette(cx);
         let mut list = scroll_list("chapters");
         let Some(player) = &self.player else {
             return list;
@@ -372,13 +379,13 @@ impl BgmApp {
             let current = self.chapter == Some(i);
             let start = chapter.start;
             list = list.child(
-                row(("chapter", i), current)
+                row(("chapter", i), current, &p)
                     .child(
                         div()
                             .w(px(56.))
                             .flex_none()
                             .text_xs()
-                            .text_color(rgb(MUTED))
+                            .text_color(p.muted)
                             .child(format_time(start)),
                     )
                     .child(
@@ -394,7 +401,8 @@ impl BgmApp {
         list
     }
 
-    fn render_recent(&mut self, cx: &mut Context<Self>) -> Stateful<gpui::Div> {
+    fn render_recent(&mut self, cx: &mut Context<Self>) -> gpui::Stateful<gpui::Div> {
+        let p = palette(cx);
         let mut list = scroll_list("recent");
         if self.state.files.is_empty() {
             return list.child(
@@ -402,7 +410,7 @@ impl BgmApp {
                     .px_2()
                     .py_3()
                     .text_xs()
-                    .text_color(rgb(MUTED))
+                    .text_color(p.muted)
                     .child("Files you play show up here, with where you left off."),
             );
         }
@@ -445,7 +453,7 @@ impl BgmApp {
             };
 
             list = list.child(
-                row(("recent", i), current)
+                row(("recent", i), current, &p)
                     .when(!available, |el| el.opacity(0.5))
                     .child(
                         div()
@@ -460,30 +468,28 @@ impl BgmApp {
                                     .h(px(3.))
                                     .w_full()
                                     .rounded_full()
-                                    .bg(rgb(PANEL_HOVER))
+                                    .bg(p.panel_hover)
                                     .child(
                                         div()
                                             .h_full()
                                             .w(relative(fraction))
                                             .rounded_full()
-                                            .bg(rgb(if current { ACCENT } else { MUTED })),
+                                            .bg(if current { p.accent } else { p.muted }),
                                     ),
                             )
-                            .child(div().text_xs().text_color(rgb(MUTED)).child(detail)),
+                            .child(div().text_xs().text_color(p.muted).child(detail)),
                     )
                     .when(!current, |el| {
                         el.child(
-                            div()
-                                .id(("forget", i))
-                                .px_2()
-                                .rounded_sm()
-                                .text_color(rgb(MUTED))
-                                .hover(|s| s.text_color(rgb(TEXT)).bg(rgb(PANEL)))
-                                .child("×")
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    cx.stop_propagation();
-                                    this.forget_recent(i, cx)
-                                })),
+                            Button::new(("forget", i))
+                                .ghost()
+                                .xsmall()
+                                .label("×")
+                                .text_color(p.muted)
+                                .tooltip("Remove from list")
+                                .on_click(
+                                    cx.listener(move |this, _, _, cx| this.forget_recent(i, cx)),
+                                ),
                         )
                         .on_click(cx.listener(move |this, _, _, cx| this.open_recent(i, cx)))
                     }),
@@ -493,88 +499,8 @@ impl BgmApp {
     }
 }
 
-fn button(id: &'static str, label: impl Into<SharedString>) -> Stateful<gpui::Div> {
-    div()
-        .id(id)
-        .px_3()
-        .py_1p5()
-        .rounded_md()
-        .bg(rgb(PANEL))
-        .hover(|s| s.bg(rgb(PANEL_HOVER)))
-        .cursor_pointer()
-        .flex()
-        .justify_center()
-        .child(label.into())
-}
-
-fn primary_button(id: &'static str, label: impl Into<SharedString>) -> Stateful<gpui::Div> {
-    div()
-        .id(id)
-        .px_3()
-        .py_1p5()
-        .rounded_md()
-        .bg(rgb(ACCENT))
-        .text_color(rgb(BG))
-        .font_weight(FontWeight::SEMIBOLD)
-        .hover(|s| s.bg(rgb(0xa8d1b6)))
-        .cursor_pointer()
-        .flex()
-        .justify_center()
-        .child(label.into())
-}
-
-fn toggle(id: &'static str, label: impl Into<SharedString>, on: bool) -> Stateful<gpui::Div> {
-    let dot: Hsla = if on {
-        rgb(ACCENT).into()
-    } else {
-        rgb(PANEL_HOVER).into()
-    };
-    div()
-        .id(id)
-        .flex()
-        .items_center()
-        .gap_1p5()
-        .px_2()
-        .py_1()
-        .rounded_md()
-        .text_xs()
-        .text_color(rgb(if on { TEXT } else { MUTED }))
-        .hover(|s| s.bg(rgb(PANEL)))
-        .cursor_pointer()
-        .child(div().size(px(8.)).rounded_full().bg(dot))
-        .child(label.into())
-}
-
-fn tab_button(
-    id: &'static str,
-    label: &'static str,
-    count: usize,
-    selected: bool,
-) -> Stateful<gpui::Div> {
-    div()
-        .id(id)
-        .flex()
-        .gap_1p5()
-        .px_3()
-        .py_1()
-        .rounded_md()
-        .cursor_pointer()
-        .text_color(rgb(if selected { TEXT } else { MUTED }))
-        .when(selected, |el| el.bg(rgb(PANEL_HOVER)))
-        .when(!selected, |el| el.hover(|s| s.text_color(rgb(TEXT))))
-        .child(label)
-        .child(div().text_color(rgb(MUTED)).child(count.to_string()))
-}
-
-fn scroll_list(id: &'static str) -> Stateful<gpui::Div> {
-    div()
-        .id(id)
-        .flex_1()
-        .min_h_0()
-        .overflow_y_scroll()
-        .flex()
-        .flex_col()
-        .gap_1()
+fn scroll_list(id: &'static str) -> gpui::Stateful<gpui::Div> {
+    div().id(id).flex_1().min_h_0().flex().flex_col().gap_1()
 }
 
 fn now() -> u64 {
@@ -594,7 +520,7 @@ fn ago(seconds: u64) -> String {
     }
 }
 
-fn row(id: impl Into<gpui::ElementId>, current: bool) -> Stateful<gpui::Div> {
+fn row(id: impl Into<gpui::ElementId>, current: bool, p: &Palette) -> gpui::Stateful<gpui::Div> {
     div()
         .id(id)
         .flex()
@@ -604,22 +530,8 @@ fn row(id: impl Into<gpui::ElementId>, current: bool) -> Stateful<gpui::Div> {
         .py_1p5()
         .rounded_md()
         .cursor_pointer()
-        .when(current, |el| el.bg(rgb(PANEL)).text_color(rgb(ACCENT)))
-        .hover(|s| s.bg(rgb(PANEL_HOVER)))
-}
-
-/// An invisible element that stores its parent's bounds each frame.
-fn record_bounds(target: Rc<Cell<Bounds<Pixels>>>) -> impl IntoElement {
-    canvas(move |bounds, _, _| target.set(bounds), |_, _, _, _| {})
-        .absolute()
-        .size_full()
-}
-
-fn fraction_in(bounds: Bounds<Pixels>, x: Pixels) -> f32 {
-    if bounds.size.width <= px(0.) {
-        return 0.0;
-    }
-    ((x - bounds.origin.x) / bounds.size.width).clamp(0.0, 1.0)
+        .when(current, |el| el.bg(p.panel).text_color(p.accent))
+        .hover(|s| s.bg(p.panel_hover))
 }
 
 fn format_time(seconds: f64) -> String {
