@@ -8,10 +8,21 @@ use block2::RcBlock;
 use futures::channel::mpsc::UnboundedSender;
 use gpui::{App, Global, Hsla, WindowAppearance, hsla, rgb};
 use gpui_component::{Theme, ThemeMode};
-use objc2_app_kit::{NSColor, NSColorSpace, NSSystemColorsDidChangeNotification};
-use objc2_foundation::{NSNotification, NSNotificationCenter, NSOperationQueue};
+use objc2::MainThreadMarker;
+use objc2_app_kit::{
+    NSAppearance, NSAppearanceNameAqua, NSAppearanceNameDarkAqua, NSApplication, NSColor,
+    NSColorSpace, NSControlStateValueOff, NSControlStateValueOn,
+    NSSystemColorsDidChangeNotification,
+};
+use objc2_foundation::{NSNotification, NSNotificationCenter, NSOperationQueue, NSString};
 
 use crate::Event;
+use crate::state::Appearance;
+
+pub const VIEW_MENU: &str = "View";
+pub const FOLLOW_SYSTEM: &str = "Follow System";
+pub const LIGHT_MODE: &str = "Light Mode";
+pub const DARK_MODE: &str = "Dark Mode";
 
 #[derive(Clone, Copy)]
 pub struct Palette {
@@ -143,6 +154,45 @@ pub fn apply(appearance: WindowAppearance, cx: &mut App) {
     t.scrollbar_thumb_hover = p.muted;
     t.list_hover = p.panel_hover;
     t.selection = p.accent.opacity(0.3);
+}
+
+/// Sets `NSApp.appearance` (nil follows the system) and checkmarks the View menu.
+/// Windows then report the new appearance, which `apply` turns into the palette.
+pub fn set_app_appearance(choice: Appearance) {
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    let app = NSApplication::sharedApplication(mtm);
+    let appearance = unsafe {
+        match choice {
+            Appearance::System => None,
+            Appearance::Light => NSAppearance::appearanceNamed(NSAppearanceNameAqua),
+            Appearance::Dark => NSAppearance::appearanceNamed(NSAppearanceNameDarkAqua),
+        }
+    };
+    app.setAppearance(appearance.as_deref());
+
+    // GPUI menus have no checked state; set it on the NSMenuItems it built.
+    let Some(view) = app
+        .mainMenu()
+        .and_then(|menu| menu.itemWithTitle(&NSString::from_str(VIEW_MENU)))
+        .and_then(|item| item.submenu())
+    else {
+        return;
+    };
+    for (title, value) in [
+        (FOLLOW_SYSTEM, Appearance::System),
+        (LIGHT_MODE, Appearance::Light),
+        (DARK_MODE, Appearance::Dark),
+    ] {
+        if let Some(item) = view.itemWithTitle(&NSString::from_str(title)) {
+            item.setState(if value == choice {
+                NSControlStateValueOn
+            } else {
+                NSControlStateValueOff
+            });
+        }
+    }
 }
 
 /// `NSColor.controlAccentColor` in sRGB: the accent colour picked in System Settings

@@ -41,7 +41,10 @@ actions!(
         PrevChapter,
         NextChapter,
         VolumeUp,
-        VolumeDown
+        VolumeDown,
+        FollowSystem,
+        LightMode,
+        DarkMode
     ]
 );
 
@@ -406,6 +409,20 @@ impl BgmApp {
     }
 
     /// Switches between the full window and the mini player, resizing the window.
+    /// View menu: remembered, applied to the whole app (title bar and Sparkle too).
+    pub fn set_appearance(
+        &mut self,
+        appearance: state::Appearance,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.state.appearance = appearance;
+        self.state.save();
+        theme::set_app_appearance(appearance);
+        theme::apply(cx.window_appearance(), cx);
+        cx.notify();
+    }
+
     pub fn toggle_compact(&mut self, window: &mut gpui::Window, cx: &mut Context<Self>) {
         let current = window.viewport_size();
         let height = if self.state.compact {
@@ -671,6 +688,14 @@ fn main() {
                 items: vec![MenuItem::action("Open…", Open)],
             },
             Menu {
+                name: theme::VIEW_MENU.into(),
+                items: vec![
+                    MenuItem::action(theme::FOLLOW_SYSTEM, FollowSystem),
+                    MenuItem::action(theme::LIGHT_MODE, LightMode),
+                    MenuItem::action(theme::DARK_MODE, DarkMode),
+                ],
+            },
+            Menu {
                 name: "Playback".into(),
                 items: vec![
                     MenuItem::action("Play/Pause", TogglePlay),
@@ -687,6 +712,8 @@ fn main() {
         ]);
 
         let state = State::load();
+        theme::set_app_appearance(state.appearance);
+        theme::apply(cx.window_appearance(), cx);
         let window_bounds = restored_window_bounds(&state, cx);
         cx.open_window(
             WindowOptions {

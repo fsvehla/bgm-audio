@@ -33,6 +33,7 @@ Next
 - [x] Volume: gpui-component Slider (click + drag), saved 300 ms after it settles
 - [x] UI on gpui-component (Button, Switch, TabBar, Slider, scrollbar); progress bar drags to scrub
 - [x] Colours follow the system: light/dark appearance + accent colour (live)
+- [x] View menu: Follow System / Light Mode / Dark Mode (NSApp.appearance), remembered
 - [x] Display name "Ambience" (Dock, menus, window, Ambience.app); bundle ID, state folder and crate stay bgm-audio
 - [x] Sparkle updates: packaging/release.sh publishes zip + appcast.xml per GitHub release
 - [x] Homebrew: fsvehla/tap/ambience (auto_updates), bumped by release.sh

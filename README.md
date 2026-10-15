@@ -23,12 +23,13 @@ Requires macOS 14.2. Updates through Sparkle (Ambience → Check for Updates…)
 - Cover art in the window and in Now Playing
 - Now Playing, media keys and Control Center. Skip buttons go to the
   previous/next chapter, or ±10 s without chapters
-- Remembers the last file, the position in every file, volume, loop and
-  window frame. Recent files list. Moved files are found again
+- Remembers the last file, the position in every file, volume, loop,
+  appearance and window frame. Recent files list. Moved files are found again
 - Pauses while another app uses the microphone (calls), resumes afterwards.
   Can be turned off
 - Mini player mode
-- Light/dark and accent colour follow the system
+- Light/dark follows the system, or is set in the View menu. Accent colour
+  follows the system
 
 ## Usage
 

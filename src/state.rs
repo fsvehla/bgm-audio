@@ -29,6 +29,8 @@ pub struct State {
     pub tab: Tab,
     /// Last window frame, restored on launch if it is still on a display.
     pub window: Option<SavedWindow>,
+    /// View menu: follow the system appearance or force light/dark.
+    pub appearance: Appearance,
     /// Mini player: only artwork, title, progress bar and controls.
     pub compact: bool,
     /// Window height to return to when leaving the mini player.
@@ -45,6 +47,7 @@ impl Default for State {
             looping: true,
             mic_auto_pause: true,
             tab: Tab::Chapters,
+            appearance: Appearance::System,
             window: None,
             compact: false,
             expanded_height: None,
@@ -59,6 +62,15 @@ pub enum Tab {
     #[default]
     Chapters,
     Recent,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum Appearance {
+    #[default]
+    System,
+    Light,
+    Dark,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq)]

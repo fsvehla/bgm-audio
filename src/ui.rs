@@ -12,11 +12,11 @@ use gpui_component::switch::Switch;
 use gpui_component::tab::{Tab as TabItem, TabBar};
 use gpui_component::{Sizable, StyledExt};
 
-use crate::state::Tab;
+use crate::state::{Appearance, Tab};
 use crate::theme::{Palette, palette};
 use crate::{
-    BgmApp, NextChapter, Open, PrevChapter, SKIP_SECONDS, SkipBack, SkipForward, TogglePlay,
-    VolumeDown, VolumeUp,
+    BgmApp, DarkMode, FollowSystem, LightMode, NextChapter, Open, PrevChapter, SKIP_SECONDS,
+    SkipBack, SkipForward, TogglePlay, VolumeDown, VolumeUp,
 };
 
 /// Don't pull the progress bar back to the player position this soon after a scrub.
@@ -39,6 +39,15 @@ impl Render for BgmApp {
             }))
             .on_action(cx.listener(|this, _: &VolumeDown, window, cx| {
                 this.set_volume(this.state.volume - 0.05, window, cx)
+            }))
+            .on_action(cx.listener(|this, _: &FollowSystem, window, cx| {
+                this.set_appearance(Appearance::System, window, cx)
+            }))
+            .on_action(cx.listener(|this, _: &LightMode, window, cx| {
+                this.set_appearance(Appearance::Light, window, cx)
+            }))
+            .on_action(cx.listener(|this, _: &DarkMode, window, cx| {
+                this.set_appearance(Appearance::Dark, window, cx)
             }))
             .on_drop(cx.listener(|this, paths: &ExternalPaths, _, cx| {
                 if let Some(path) = paths.paths().first() {
