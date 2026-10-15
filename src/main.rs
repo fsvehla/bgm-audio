@@ -11,7 +11,7 @@ use std::time::Duration;
 use futures::StreamExt;
 use gpui::{
     App, AppContext, Application, Bounds, Context, FocusHandle, Image, ImageFormat, KeyBinding,
-    Menu, MenuItem, PathPromptOptions, Pixels, Task, WindowBounds, WindowOptions, actions, px,
+    Menu, MenuItem, PathPromptOptions, Pixels, SystemMenuType, Task, WindowBounds, WindowOptions, actions, px,
     size,
 };
 use objc2::MainThreadMarker;
@@ -27,6 +27,9 @@ actions!(
     bgm,
     [
         Quit,
+        Hide,
+        HideOthers,
+        ShowAll,
         Open,
         TogglePlay,
         SkipBack,
@@ -533,6 +536,8 @@ fn main() {
     Application::new().run(move |cx: &mut App| {
         cx.bind_keys([
             KeyBinding::new("cmd-q", Quit, None),
+            KeyBinding::new("cmd-h", Hide, None),
+            KeyBinding::new("alt-cmd-h", HideOthers, None),
             KeyBinding::new("cmd-o", Open, None),
             KeyBinding::new("space", TogglePlay, None),
             KeyBinding::new("left", SkipBack, None),
@@ -543,10 +548,22 @@ fn main() {
             KeyBinding::new("down", VolumeDown, None),
         ]);
         cx.on_action(|_: &Quit, cx| cx.quit());
+        // GPUI has no standard app menu; these mirror what Zed wires up by hand.
+        cx.on_action(|_: &Hide, cx| cx.hide());
+        cx.on_action(|_: &HideOthers, cx| cx.hide_other_apps());
+        cx.on_action(|_: &ShowAll, cx| cx.unhide_other_apps());
         cx.set_menus(vec![
             Menu {
                 name: "bgm-audio".into(),
-                items: vec![MenuItem::action("Quit bgm-audio", Quit)],
+                items: vec![
+                    MenuItem::os_submenu("Services", SystemMenuType::Services),
+                    MenuItem::separator(),
+                    MenuItem::action("Hide bgm-audio", Hide),
+                    MenuItem::action("Hide Others", HideOthers),
+                    MenuItem::action("Show All", ShowAll),
+                    MenuItem::separator(),
+                    MenuItem::action("Quit bgm-audio", Quit),
+                ],
             },
             Menu {
                 name: "File".into(),
