@@ -30,4 +30,5 @@ Next
 - [ ] File associations in Info.plist ("Open With") + on_open_urls handling
 - [x] App icon
 - [x] App menu: Services, Hide (cmd-h), Hide Others (alt-cmd-h), Show All
+- [x] Volume: gpui-component Slider (click + drag), saved 300 ms after it settles
 - [ ] Menu bar extra instead of / in addition to the window?

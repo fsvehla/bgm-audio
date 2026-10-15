@@ -10,10 +10,11 @@ use std::time::Duration;
 
 use futures::StreamExt;
 use gpui::{
-    App, AppContext, Application, Bounds, Context, FocusHandle, Image, ImageFormat, KeyBinding,
-    Menu, MenuItem, PathPromptOptions, Pixels, SystemMenuType, Task, WindowBounds, WindowOptions, actions, px,
-    size,
+    App, AppContext, Application, Bounds, Context, Entity, FocusHandle, Image, ImageFormat,
+    KeyBinding, Menu, MenuItem, PathPromptOptions, Pixels, SystemMenuType, Task, Window,
+    WindowBounds, WindowOptions, actions, px, size,
 };
+use gpui_component::slider::{SliderEvent, SliderState};
 use objc2::MainThreadMarker;
 use objc2::rc::Retained;
 use objc2_media_player::MPMediaItemArtwork;
@@ -76,7 +77,8 @@ pub struct BgmApp {
     error: Option<String>,
     focus: FocusHandle,
     bar_bounds: std::rc::Rc<std::cell::Cell<Bounds<Pixels>>>,
-    volume_bounds: std::rc::Rc<std::cell::Cell<Bounds<Pixels>>>,
+    volume_slider: Entity<SliderState>,
+    volume_save: Option<Task<()>>,
     ticks: u32,
     /// Position changed since the file was opened (played or seeked). Until then
     /// we keep the saved position, so the resume rewind doesn't pile up.
@@ -112,6 +114,18 @@ impl BgmApp {
             async {}
         });
 
+        let volume_slider = cx.new(|_| {
+            SliderState::new()
+                .min(0.0)
+                .max(1.0)
+                .step(0.01)
+                .default_value(state.volume)
+        });
+        let volume_changed = cx.subscribe(&volume_slider, |this, _, event: &SliderEvent, cx| {
+            let SliderEvent::Change(value) = event;
+            this.apply_volume(value.end(), cx);
+        });
+
         let mut app = Self {
             state,
             player: None,
@@ -126,11 +140,12 @@ impl BgmApp {
             error: None,
             focus: cx.focus_handle(),
             bar_bounds: Default::default(),
-            volume_bounds: Default::default(),
+            volume_slider,
+            volume_save: None,
             ticks: 0,
             moved: false,
             _tasks: vec![events, ticker],
-            _subscriptions: vec![quit],
+            _subscriptions: vec![quit, volume_changed],
         };
 
         // Restore the last session (paused), unless a file was passed on the command line.
@@ -320,12 +335,26 @@ impl BgmApp {
         self.seek(target, cx);
     }
 
-    pub fn set_volume(&mut self, volume: f32, cx: &mut Context<Self>) {
+    /// Sets the volume from outside the slider (keys, menu) and moves the slider along.
+    pub fn set_volume(&mut self, volume: f32, window: &mut Window, cx: &mut Context<Self>) {
+        let volume = volume.clamp(0.0, 1.0);
+        self.volume_slider
+            .update(cx, |slider, cx| slider.set_value(volume, window, cx));
+        self.apply_volume(volume, cx);
+    }
+
+    /// Applies a volume change; saved once it stops changing (the slider fires per mouse move).
+    fn apply_volume(&mut self, volume: f32, cx: &mut Context<Self>) {
         self.state.volume = volume.clamp(0.0, 1.0);
         if let Some(player) = &self.player {
             player.set_volume(self.state.volume);
         }
-        self.state.save();
+        self.volume_save = Some(cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(Duration::from_millis(300))
+                .await;
+            this.update(cx, |this, _| this.state.save()).ok();
+        }));
         cx.notify();
     }
 
@@ -534,6 +563,7 @@ fn main() {
     let open_path = std::env::args_os().nth(1).map(PathBuf::from);
 
     Application::new().run(move |cx: &mut App| {
+        gpui_component::init(cx);
         cx.bind_keys([
             KeyBinding::new("cmd-q", Quit, None),
             KeyBinding::new("cmd-h", Hide, None),

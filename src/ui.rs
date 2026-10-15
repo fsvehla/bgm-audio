@@ -10,6 +10,8 @@ use gpui::{
     rgba,
 };
 
+use gpui_component::slider::Slider;
+
 use crate::state::Tab;
 use crate::{
     BgmApp, NextChapter, Open, PrevChapter, SKIP_SECONDS, SkipBack, SkipForward, TogglePlay,
@@ -35,11 +37,11 @@ impl Render for BgmApp {
             .on_action(cx.listener(|this, _: &SkipForward, _, cx| this.skip(SKIP_SECONDS, cx)))
             .on_action(cx.listener(|this, _: &PrevChapter, _, cx| this.prev_chapter(cx)))
             .on_action(cx.listener(|this, _: &NextChapter, _, cx| this.next_chapter(cx)))
-            .on_action(cx.listener(|this, _: &VolumeUp, _, cx| {
-                this.set_volume(this.state.volume + 0.05, cx)
+            .on_action(cx.listener(|this, _: &VolumeUp, window, cx| {
+                this.set_volume(this.state.volume + 0.05, window, cx)
             }))
-            .on_action(cx.listener(|this, _: &VolumeDown, _, cx| {
-                this.set_volume(this.state.volume - 0.05, cx)
+            .on_action(cx.listener(|this, _: &VolumeDown, window, cx| {
+                this.set_volume(this.state.volume - 0.05, window, cx)
             }))
             .on_drop(cx.listener(|this, paths: &ExternalPaths, _, cx| {
                 if let Some(path) = paths.paths().first() {
@@ -254,8 +256,8 @@ impl BgmApp {
                 )
             });
 
-        // Volume bar, same click-to-set approach as the progress bar.
-        let volume_bounds = self.volume_bounds.clone();
+        // gpui-component slider: click to jump, drag to slide. Bar colour comes from
+        // bg, thumb colour from text_color.
         let volume = div()
             .flex()
             .items_center()
@@ -264,36 +266,11 @@ impl BgmApp {
             .text_color(rgb(MUTED))
             .child("Vol")
             .child(
-                div()
-                    .id("volume")
-                    .relative()
-                    .w(px(90.))
-                    .h(px(14.))
-                    .flex()
-                    .items_center()
-                    .cursor_pointer()
-                    .child(
-                        div()
-                            .h(px(4.))
-                            .w_full()
-                            .rounded_full()
-                            .bg(rgb(PANEL_HOVER))
-                            .child(
-                                div()
-                                    .h_full()
-                                    .w(relative(self.state.volume))
-                                    .rounded_full()
-                                    .bg(rgb(MUTED)),
-                            ),
-                    )
-                    .child(record_bounds(volume_bounds))
-                    .on_mouse_down(
-                        MouseButton::Left,
-                        cx.listener(|this, event: &MouseDownEvent, _, cx| {
-                            let f = fraction_in(this.volume_bounds.get(), event.position.x);
-                            this.set_volume(f, cx);
-                        }),
-                    ),
+                div().w(px(90.)).child(
+                    Slider::new(&self.volume_slider)
+                        .bg(rgb(MUTED))
+                        .text_color(rgb(TEXT)),
+                ),
             );
 
         let mic_label: SharedString = match (&self.mic_app, self.auto_paused) {
