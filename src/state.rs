@@ -2,6 +2,7 @@
 //!
 //! Stored as JSON in ~/Library/Application Support/bgm-audio/state.json and
 //! written atomically (temp file + rename).
+//! The folder keeps the original bgm-audio name so existing state carries over.
 
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Builds target/<profile>/bgm-audio.app around the cargo binary and signs it.
+# Builds target/<profile>/Ambience.app around the cargo binary (bgm-audio) and signs it.
 #
 # Usage: packaging/bundle.sh [debug|release]
 #
@@ -36,13 +36,13 @@ newest_developer_id() {
 }
 
 if [ "$profile" = release ]; then cargo build --release; else cargo build; fi
-app="target/$profile/bgm-audio.app"
+app="target/$profile/Ambience.app"
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp packaging/Info.plist "$app/Contents/Info.plist"
 # Icon is rendered from packaging/icon/icon.html by packaging/icon/render.sh.
 cp packaging/icon/AppIcon.icns "$app/Contents/Resources/AppIcon.icns"
-cp "target/$profile/bgm-audio" "$app/Contents/MacOS/bgm-audio"
+cp "target/$profile/bgm-audio" "$app/Contents/MacOS/Ambience"
 
 identity="${SIGN_IDENTITY:-$(newest_developer_id)}"
 identity="${identity:--}"
@@ -58,7 +58,7 @@ fi
 
 if [ "${NOTARIZE:-0}" = 1 ]; then
   [ "$identity" != - ] || { echo "notarization needs a Developer ID signature" >&2; exit 1; }
-  zip="target/$profile/bgm-audio.zip"
+  zip="target/$profile/Ambience.zip"
   ditto -c -k --keepParent "$app" "$zip"
   xcrun notarytool submit "$zip" --keychain-profile "${NOTARY_PROFILE:-notary}" --wait
   xcrun stapler staple "$app"

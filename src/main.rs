@@ -43,6 +43,9 @@ actions!(
     ]
 );
 
+/// Shown in the menu bar, Dock and window title (the crate and bundle ID stay bgm-audio).
+const APP_NAME: &str = "Ambience";
+
 const SKIP_SECONDS: f64 = 10.0;
 /// On resume, rewind a little so playback doesn't restart mid-phrase.
 const RESUME_REWIND: f64 = 3.0;
@@ -627,15 +630,15 @@ fn main() {
         cx.on_action(|_: &ShowAll, cx| cx.unhide_other_apps());
         cx.set_menus(vec![
             Menu {
-                name: "bgm-audio".into(),
+                name: APP_NAME.into(),
                 items: vec![
                     MenuItem::os_submenu("Services", SystemMenuType::Services),
                     MenuItem::separator(),
-                    MenuItem::action("Hide bgm-audio", Hide),
+                    MenuItem::action(format!("Hide {APP_NAME}"), Hide),
                     MenuItem::action("Hide Others", HideOthers),
                     MenuItem::action("Show All", ShowAll),
                     MenuItem::separator(),
-                    MenuItem::action("Quit bgm-audio", Quit),
+                    MenuItem::action(format!("Quit {APP_NAME}"), Quit),
                 ],
             },
             Menu {
@@ -665,7 +668,7 @@ fn main() {
                 window_bounds: Some(window_bounds),
                 window_min_size: Some(size(px(MIN_WIDTH), px(COMPACT_HEIGHT))),
                 titlebar: Some(gpui::TitlebarOptions {
-                    title: Some("bgm-audio".into()),
+                    title: Some(APP_NAME.into()),
                     appears_transparent: true,
                     traffic_light_position: Some(gpui::point(px(12.), px(12.))),
                 }),
