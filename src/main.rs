@@ -4,6 +4,7 @@ mod player;
 mod state;
 mod theme;
 mod ui;
+mod updater;
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -32,6 +33,7 @@ actions!(
         Hide,
         HideOthers,
         ShowAll,
+        CheckForUpdates,
         Open,
         TogglePlay,
         SkipBack,
@@ -628,18 +630,41 @@ fn main() {
         cx.on_action(|_: &Hide, cx| cx.hide());
         cx.on_action(|_: &HideOthers, cx| cx.hide_other_apps());
         cx.on_action(|_: &ShowAll, cx| cx.unhide_other_apps());
+
+        // Sparkle only exists inside the .app bundle; without it there is no menu item.
+        let has_updater = match updater::Updater::start() {
+            Some(updater) => {
+                cx.set_global(updater);
+                true
+            }
+            None => false,
+        };
+        cx.on_action(|_: &CheckForUpdates, cx| {
+            if let Some(updater) = cx.try_global::<updater::Updater>() {
+                updater.check_for_updates();
+            }
+        });
+        let mut app_menu = Vec::new();
+        if has_updater {
+            app_menu.push(MenuItem::action("Check for Updates…", CheckForUpdates));
+            app_menu.push(MenuItem::separator());
+        }
+
         cx.set_menus(vec![
             Menu {
                 name: APP_NAME.into(),
-                items: vec![
-                    MenuItem::os_submenu("Services", SystemMenuType::Services),
-                    MenuItem::separator(),
-                    MenuItem::action(format!("Hide {APP_NAME}"), Hide),
-                    MenuItem::action("Hide Others", HideOthers),
-                    MenuItem::action("Show All", ShowAll),
-                    MenuItem::separator(),
-                    MenuItem::action(format!("Quit {APP_NAME}"), Quit),
-                ],
+                items: app_menu
+                    .into_iter()
+                    .chain([
+                        MenuItem::os_submenu("Services", SystemMenuType::Services),
+                        MenuItem::separator(),
+                        MenuItem::action(format!("Hide {APP_NAME}"), Hide),
+                        MenuItem::action("Hide Others", HideOthers),
+                        MenuItem::action("Show All", ShowAll),
+                        MenuItem::separator(),
+                        MenuItem::action(format!("Quit {APP_NAME}"), Quit),
+                    ])
+                    .collect(),
             },
             Menu {
                 name: "File".into(),

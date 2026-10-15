@@ -7,11 +7,15 @@
 	<key>CFBundleIdentifier</key><string>at.fsvehla.bgm-audio</string>
 	<key>CFBundleExecutable</key><string>Ambience</string>
 	<key>CFBundlePackageType</key><string>APPL</string>
-	<key>CFBundleVersion</key><string>0.1.1</string>
-	<key>CFBundleShortVersionString</key><string>0.1.1</string>
+	<key>CFBundleVersion</key><string>0.1.2</string>
+	<key>CFBundleShortVersionString</key><string>0.1.2</string>
 	<key>LSMinimumSystemVersion</key><string>14.2</string>
 	<key>NSHighResolutionCapable</key><true/>
 	<key>CFBundleIconFile</key><string>AppIcon</string>
 	<key>LSApplicationCategoryType</key><string>public.app-category.music</string>
+	<!-- Sparkle: each GitHub release carries an appcast.xml for itself (packaging/release.sh). -->
+	<key>SUFeedURL</key><string>https://github.com/fsvehla/bgm-audio/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key><string>bAS+Hld3ES4qPgSeef0qEpzvZY8+auSIBdoEMGoLHJY=</string>
+	<key>SUEnableAutomaticChecks</key><true/>
 </dict>
 </plist>

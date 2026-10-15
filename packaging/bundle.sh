@@ -38,14 +38,33 @@ newest_developer_id() {
 if [ "$profile" = release ]; then cargo build --release; else cargo build; fi
 app="target/$profile/Ambience.app"
 rm -rf "$app"
-mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
+mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$app/Contents/Frameworks"
 cp packaging/Info.plist "$app/Contents/Info.plist"
 # Icon is rendered from packaging/icon/icon.html by packaging/icon/render.sh.
 cp packaging/icon/AppIcon.icns "$app/Contents/Resources/AppIcon.icns"
 cp "target/$profile/bgm-audio" "$app/Contents/MacOS/Ambience"
 
+# Sparkle (updates): pinned download, see packaging/sparkle/fetch.sh. The XPC services
+# are only needed by sandboxed apps; this one isn't, so leave them out.
+packaging/sparkle/fetch.sh
+sparkle="$app/Contents/Frameworks/Sparkle.framework"
+ditto packaging/sparkle/dist/Sparkle.framework "$sparkle"
+rm -rf "$sparkle/Versions/B/XPCServices" "$sparkle/XPCServices"
+
 identity="${SIGN_IDENTITY:-$(newest_developer_id)}"
 identity="${identity:--}"
+# Sign nested code first, the app last (no --deep: it signs in the wrong order).
+sign() {
+  if [ "$identity" = - ]; then
+    codesign --force --sign - "$@"
+  else
+    codesign --force --options runtime --timestamp --sign "$identity" "$@"
+  fi
+}
+sign "$sparkle/Versions/B/Autoupdate"
+sign "$sparkle/Versions/B/Updater.app"
+sign "$sparkle"
+
 if [ "$identity" = - ]; then
   codesign --force --sign - "$app"
   echo "signed ad-hoc (local use only)" >&2
