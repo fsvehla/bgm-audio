@@ -401,26 +401,36 @@ impl BgmApp {
 
     /// Remembers the window frame; saved once the window stops moving.
     fn window_changed(&mut self, window: &mut gpui::Window, cx: &mut Context<Self>) {
+        // Saved once the window settles. The window learns its new display separately
+        // from the move, so the display is read here, not when the move is reported.
+        self.window_save = Some(cx.spawn_in(window, async move |this, cx| {
+            cx.background_executor().timer(WINDOW_SAVE_DELAY).await;
+            this.update_in(cx, |this, window, cx| this.save_window(window, cx))
+                .ok();
+        }));
+    }
+
+    fn save_window(&mut self, window: &mut gpui::Window, cx: &mut Context<Self>) {
         let (mode, bounds) = match window.window_bounds() {
             WindowBounds::Windowed(b) => (state::WindowMode::Windowed, b),
             WindowBounds::Maximized(b) => (state::WindowMode::Maximized, b),
             WindowBounds::Fullscreen(b) => (state::WindowMode::Fullscreen, b),
         };
         let saved = state::SavedWindow {
+            display: window
+                .display(cx)
+                .and_then(|d| d.uuid().ok())
+                .map(|uuid| uuid.to_string()),
             x: bounds.origin.x.into(),
             y: bounds.origin.y.into(),
             width: bounds.size.width.into(),
             height: bounds.size.height.into(),
             mode,
         };
-        if self.state.window == Some(saved) {
-            return;
+        if self.state.window.as_ref() != Some(&saved) {
+            self.state.window = Some(saved);
+            self.state.save();
         }
-        self.state.window = Some(saved);
-        self.window_save = Some(cx.spawn(async move |this, cx| {
-            cx.background_executor().timer(WINDOW_SAVE_DELAY).await;
-            this.update(cx, |this, _| this.state.save()).ok();
-        }));
     }
 
     /// View menu: remembered, applied to the whole app (title bar and Sparkle too).
@@ -613,25 +623,41 @@ fn file_argument() -> Option<PathBuf> {
     None
 }
 
-fn restored_window_bounds(state: &State, cx: &App) -> WindowBounds {
-    if let Some(w) = state.window {
-        let bounds = Bounds::new(
-            gpui::point(px(w.x), px(w.y)),
-            // Saved by an older version with a smaller minimum width.
-            size(px(w.width.max(MIN_WIDTH)), px(w.height)),
-        );
-        // A point inside the title bar, so the window can always be dragged.
-        let grab = gpui::point(bounds.origin.x + px(60.), bounds.origin.y + px(12.));
-        if cx.displays().iter().any(|d| d.bounds().contains(&grab)) {
-            return match w.mode {
-                state::WindowMode::Windowed => WindowBounds::Windowed(bounds),
-                state::WindowMode::Maximized => WindowBounds::Maximized(bounds),
-                state::WindowMode::Fullscreen => WindowBounds::Fullscreen(bounds),
-            };
-        }
+/// The saved frame and the display it belongs on, or a centred default window.
+/// GPUI window bounds are relative to their display, so both are needed.
+fn restored_window_bounds(state: &State, cx: &App) -> (WindowBounds, Option<gpui::DisplayId>) {
+    let Some(w) = &state.window else {
+        let (width, height) = DEFAULT_WINDOW_SIZE;
+        let bounds = Bounds::centered(None, size(px(width), px(height)), cx);
+        return (WindowBounds::Windowed(bounds), None);
+    };
+    // The saved display, or the main one when it is gone (or wasn't recorded yet).
+    let display = w
+        .display
+        .as_ref()
+        .and_then(|uuid| {
+            cx.displays()
+                .into_iter()
+                .find(|d| d.uuid().is_ok_and(|u| u.to_string() == *uuid))
+        })
+        .or_else(|| cx.primary_display());
+    let display_id = display.as_ref().map(|d| d.id());
+    // Saved by an older version with a smaller minimum width.
+    let size = size(px(w.width.max(MIN_WIDTH)), px(w.height));
+    let mut bounds = Bounds::new(gpui::point(px(w.x), px(w.y)), size);
+    // A point inside the title bar must be on the display, so the window can be dragged.
+    let grab = gpui::point(bounds.origin.x + px(60.), bounds.origin.y + px(12.));
+    let on_display = display
+        .is_some_and(|d| Bounds::new(gpui::point(px(0.), px(0.)), d.bounds().size).contains(&grab));
+    if !on_display {
+        bounds = Bounds::centered(display_id, size, cx);
     }
-    let (width, height) = DEFAULT_WINDOW_SIZE;
-    WindowBounds::Windowed(Bounds::centered(None, size(px(width), px(height)), cx))
+    let bounds = match w.mode {
+        state::WindowMode::Windowed => WindowBounds::Windowed(bounds),
+        state::WindowMode::Maximized => WindowBounds::Maximized(bounds),
+        state::WindowMode::Fullscreen => WindowBounds::Fullscreen(bounds),
+    };
+    (bounds, display_id)
 }
 
 /// The menu bar. Rebuilt when a checked item (appearance, mini player) changes.
@@ -760,10 +786,11 @@ fn main() {
         cx.set_menus(app_menus(&state, cx));
         theme::set_app_appearance(state.appearance);
         theme::apply(cx.window_appearance(), cx);
-        let window_bounds = restored_window_bounds(&state, cx);
+        let (window_bounds, display_id) = restored_window_bounds(&state, cx);
         cx.open_window(
             WindowOptions {
                 window_bounds: Some(window_bounds),
+                display_id,
                 window_min_size: Some(size(px(MIN_WIDTH), px(COMPACT_HEIGHT))),
                 titlebar: Some(gpui::TitlebarOptions {
                     title: Some(APP_NAME.into()),

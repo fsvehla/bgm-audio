@@ -73,8 +73,11 @@ pub enum Appearance {
     Dark,
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct SavedWindow {
+    /// UUID of the display the window was on; x and y are relative to that display.
+    #[serde(default)]
+    pub display: Option<String>,
     pub x: f32,
     pub y: f32,
     pub width: f32,
