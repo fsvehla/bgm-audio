@@ -1,5 +1,5 @@
-//! Windows: not implemented yet. Same names as `platform::macos`, doing nothing, so
-//! the app builds and its UI runs; each piece gets a real implementation later.
+//! Windows. Same names as `platform::macos`. Done: `player`. The rest does nothing yet,
+//! so the app builds and its UI runs; each piece gets a real implementation later.
 
 use std::path::{Path, PathBuf};
 
@@ -9,31 +9,7 @@ use gpui::Hsla;
 use crate::Event;
 use crate::state::Appearance;
 
-pub mod player {
-    use std::path::Path;
-
-    use crate::track::Track;
-
-    pub struct Player {
-        pub track: Track,
-    }
-
-    impl Player {
-        pub fn open(_path: &Path) -> Option<Self> {
-            None
-        }
-        pub fn play(&self) {}
-        pub fn pause(&self) {}
-        pub fn is_playing(&self) -> bool {
-            false
-        }
-        pub fn position(&self) -> f64 {
-            0.0
-        }
-        pub fn seek(&self, _seconds: f64) {}
-        pub fn set_volume(&self, _volume: f32) {}
-    }
-}
+pub mod player;
 
 pub mod now_playing {
     use futures::channel::mpsc::UnboundedSender;

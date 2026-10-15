@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 dirs = "6"
+dunce = "1"
 futures = "0.3"
 # gpui-pre: weekly snapshot of Zed's GPUI, at the exact version gpui-component pins.
 gpui = { package = "gpui-pre", version = "=0.3.9", default-features = false, features = ["font-kit"] }
@@ -26,3 +27,8 @@ objc2-core-foundation = "0.3"
 objc2-core-media = "0.3"
 objc2-foundation = "0.3"
 objc2-media-player = { version = "0.3", features = ["objc2-app-kit", "objc2-core-foundation", "objc2-av-foundation"] }
+
+# src/platform/windows. `windows` at the version GPUI's Windows backend already uses.
+[target.'cfg(target_os = "windows")'.dependencies]
+mp4ameta = "0.13"
+windows = { version = "0.62", features = ["Foundation", "Media_Core", "Media_Playback", "Storage", "Storage_Streams"] }

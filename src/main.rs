@@ -67,7 +67,11 @@ const WINDOW_SAVE_DELAY: Duration = Duration::from_millis(500);
 const DEFAULT_WINDOW_SIZE: (f32, f32) = (440., 620.);
 /// Window height of the mini player (title bar inset, header, progress, controls).
 /// The macOS content starts under the title bar; elsewhere the inset is 24 smaller.
-const COMPACT_HEIGHT: f32 = if cfg!(target_os = "macos") { 236. } else { 212. };
+const COMPACT_HEIGHT: f32 = if cfg!(target_os = "macos") {
+    236.
+} else {
+    212.
+};
 /// Fits the controls row: transport buttons (with chapter buttons) plus the mini
 /// player toggle on each side's column, gaps and window padding.
 const MIN_WIDTH: f32 = 392.;
@@ -210,7 +214,7 @@ impl BgmApp {
     }
 
     pub fn open(&mut self, path: &Path, autoplay: bool, cx: &mut Context<Self>) {
-        let path = &std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+        let path = &dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
         self.record();
         if let Some(old) = self.player.take() {
             old.pause();

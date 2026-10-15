@@ -458,11 +458,13 @@ version = "0.1.5"
 dependencies = [
  "block2 0.6.2",
  "dirs 6.0.0",
+ "dunce",
  "futures",
  "gpui-component",
  "gpui-kit-assets",
  "gpui-pre",
  "gpui-pre-platform",
+ "mp4ameta",
  "objc2 0.6.5",
  "objc2-app-kit 0.3.2",
  "objc2-av-foundation",
@@ -473,6 +475,7 @@ dependencies = [
  "objc2-media-player",
  "serde",
  "serde_json",
+ "windows 0.62.2",
 ]
 
 [[package]]
@@ -3539,6 +3542,12 @@ dependencies = [
  "num-traits",
  "pxfm",
 ]
+
+[[package]]
+name = "mp4ameta"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "453e991b2efe96c288cbc2d03a19e353504294559ecb6c03067fff5bd824616d"
 
 [[package]]
 name = "multiversion_no_op"
