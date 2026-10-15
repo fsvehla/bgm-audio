@@ -9,12 +9,22 @@ AVFoundation, so it plays what QuickTime plays (m4a, mp3, …).
 
 ## Install
 
+macOS:
+
 ```
 brew install --cask fsvehla/tap/ambience
 ```
 
-Or download the zip from [Releases](https://github.com/fsvehla/bgm-audio/releases).
+Or download the macOS zip from [Releases](https://github.com/fsvehla/bgm-audio/releases).
 Requires macOS 14.2. Updates through Sparkle (Ambience → Check for Updates…).
+
+Windows (10 and 11, x64 or arm64): download `Ambience-<version>-windows-<arch>.zip`
+from [Releases](https://github.com/fsvehla/bgm-audio/releases), unzip it anywhere
+and run `Ambience.exe`. The exe is not code-signed, so SmartScreen asks once: More
+info → Run anyway. Updates through WinSparkle (⋯ → Check for Updates…).
+
+Not on Windows: the menu bar (the ⋯ button has the same menus), "Open With" from
+Explorer, and pausing while the microphone is in use.
 
 ## Features
 
@@ -60,6 +70,11 @@ packaging/bundle.sh release            # target/release/Ambience.app
 `bundle.sh` signs with a Developer ID certificate from the keychain if there is
 one. `NOTARIZE=1` also notarizes (notarytool keychain profile `notary`).
 
+Windows release builds run on GitHub Actions (`.github/workflows/windows.yml`):
+GPUI precompiles its shaders with `fxc.exe`, which needs a Windows host. On macOS,
+`cargo xwin build --target {x86_64,aarch64}-pc-windows-msvc` (with Homebrew's
+`llvm` and `lld` on `PATH`) checks that the Windows code compiles.
+
 GPUI comes from `gpui-pre` (weekly snapshots of Zed's GPUI) at the exact version
 gpui-component pins; bump both together.
 
@@ -71,6 +86,7 @@ gpui-component pins; bump both together.
 3. Commit and push, then run `packaging/release.sh` (`DRY_RUN=1` to build
    without publishing).
 
-The script builds, notarizes, signs the zip for Sparkle, creates the GitHub
-release with the zip and `appcast.xml`, and bumps the cask in
+The script waits for the Windows CI run of the same commit, builds and notarizes
+the macOS app, signs all zips for Sparkle/WinSparkle, creates the GitHub release
+with the zips, `appcast.xml` and `appcast-windows.xml`, and bumps the cask in
 [fsvehla/homebrew-tap](https://github.com/fsvehla/homebrew-tap).

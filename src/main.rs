@@ -85,6 +85,8 @@ pub enum Event {
     SystemColorsChanged,
     /// A file opened from Finder ("Open With", double-click, drop on the Dock icon).
     OpenFile(PathBuf),
+    /// The updater installed an update (Windows) and wants the app to quit.
+    Quit,
 }
 
 pub struct BgmApp {
@@ -514,6 +516,7 @@ impl BgmApp {
                 Remote::SkipBackward => self.skip(-SKIP_SECONDS, cx),
                 Remote::Seek(seconds) => self.seek(seconds, cx),
             },
+            Event::Quit => cx.quit(),
             Event::OpenFile(path) => {
                 self.open(&path, true, cx);
                 cx.activate(true);
@@ -773,6 +776,7 @@ fn main() {
     // Created before launch: macOS can deliver opened files before the window exists.
     let (tx, rx) = futures::channel::mpsc::unbounded::<Event>();
     let events = Rc::new(RefCell::new(Some((tx.clone(), rx))));
+    let updater_tx = tx.clone();
 
     let app = gpui_platform::application().with_assets(assets::AppAssets);
     app.on_open_urls(move |urls| {
@@ -815,7 +819,7 @@ fn main() {
         cx.on_action(|_: &HideOthers, cx| cx.hide_other_apps());
         cx.on_action(|_: &ShowAll, cx| cx.unhide_other_apps());
 
-        if let Some(updater) = updater::Updater::start() {
+        if let Some(updater) = updater::Updater::start(updater_tx.clone()) {
             cx.set_global(updater);
         }
         cx.on_action(|_: &CheckForUpdates, cx| {

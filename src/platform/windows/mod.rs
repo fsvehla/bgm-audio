@@ -1,11 +1,11 @@
-//! Windows. Same names as `platform::macos`. Done: `player`, `now_playing`, appearance. The rest does nothing yet,
-//! so the app builds and its UI runs; each piece gets a real implementation later.
+//! Windows. Same names as `platform::macos`. Still doing nothing: `mic` (auto-pause is a
+//! future feature on Windows), bookmarks and file URLs (no "Open With" on Windows).
 
 use std::path::{Path, PathBuf};
 
-pub mod player;
-
 pub mod now_playing;
+pub mod player;
+pub mod updater;
 
 pub mod mic {
     use futures::channel::mpsc::UnboundedSender;
@@ -22,19 +22,6 @@ pub mod mic {
         pub fn recording_app(&self) -> Option<String> {
             None
         }
-    }
-}
-
-pub mod updater {
-    pub struct Updater;
-
-    impl gpui::Global for Updater {}
-
-    impl Updater {
-        pub fn start() -> Option<Self> {
-            None
-        }
-        pub fn check_for_updates(&self) {}
     }
 }
 

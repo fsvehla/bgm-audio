@@ -18,7 +18,7 @@ impl gpui::Global for Updater {}
 
 impl Updater {
     /// Loads the bundled framework and starts scheduled update checks.
-    pub fn start() -> Option<Self> {
+    pub fn start(_tx: futures::channel::mpsc::UnboundedSender<crate::Event>) -> Option<Self> {
         let frameworks = NSBundle::mainBundle().privateFrameworksPath()?;
         let path =
             frameworks.stringByAppendingPathComponent(&NSString::from_str("Sparkle.framework"));
