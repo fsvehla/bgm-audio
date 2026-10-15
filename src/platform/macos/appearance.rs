@@ -63,3 +63,6 @@ pub fn watch_accent(tx: UnboundedSender<Event>) {
     };
     std::mem::forget(token);
 }
+
+/// macOS: the title bar follows NSApp.appearance (see `set_app_appearance`).
+pub fn style_title_bar(_window: &gpui::Window, _dark: bool) {}

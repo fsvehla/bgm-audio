@@ -31,4 +31,8 @@ objc2-media-player = { version = "0.3", features = ["objc2-app-kit", "objc2-core
 # src/platform/windows. `windows` at the version GPUI's Windows backend already uses.
 [target.'cfg(target_os = "windows")'.dependencies]
 mp4ameta = "0.13"
-windows = { version = "0.62", features = ["Foundation", "Media", "Media_Core", "Media_Playback", "Storage", "Storage_Streams"] }
+raw-window-handle = "0.6"
+# Embed gpui-kit-assets' icons in debug builds too: otherwise they are read at runtime from
+# the build machine's cargo registry, which a Mac-built debug exe doesn't have on Windows.
+rust-embed = { version = "8", features = ["debug-embed"] }
+windows = { version = "0.62", features = ["Foundation", "Media", "Media_Core", "Media_Playback", "Storage", "Storage_Streams", "UI", "UI_ViewManagement", "Win32_Foundation", "Win32_Graphics_Dwm"] }

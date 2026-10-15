@@ -1,13 +1,7 @@
-//! Windows. Same names as `platform::macos`. Done: `player`, `now_playing`. The rest does nothing yet,
+//! Windows. Same names as `platform::macos`. Done: `player`, `now_playing`, appearance. The rest does nothing yet,
 //! so the app builds and its UI runs; each piece gets a real implementation later.
 
 use std::path::{Path, PathBuf};
-
-use futures::channel::mpsc::UnboundedSender;
-use gpui::Hsla;
-
-use crate::Event;
-use crate::state::Appearance;
 
 pub mod player;
 
@@ -44,11 +38,8 @@ pub mod updater {
     }
 }
 
-pub fn accent_color() -> Option<Hsla> {
-    None
-}
-pub fn watch_accent(_tx: UnboundedSender<Event>) {}
-pub fn set_app_appearance(_choice: Appearance) {}
+mod appearance;
+pub use appearance::{accent_color, set_app_appearance, style_title_bar, watch_accent};
 
 pub fn make_bookmark(_path: &Path) -> Option<String> {
     None

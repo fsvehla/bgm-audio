@@ -3,11 +3,20 @@
 //! feeds it into gpui-component's theme so its widgets match our own elements.
 
 use crate::platform;
+use crate::state::Appearance;
 use gpui::{App, Global, Hsla, WindowAppearance, hsla, rgb};
 use gpui_component::{Theme, ThemeMode};
 
+/// The View menu choice. macOS applies it app-wide (NSApp.appearance), so windows
+/// already report it; elsewhere the palette applies it here.
+#[derive(Clone, Copy)]
+pub struct Choice(pub Appearance);
+
+impl Global for Choice {}
+
 #[derive(Clone, Copy)]
 pub struct Palette {
+    pub dark: bool,
     pub bg: Hsla,
     pub panel: Hsla,
     pub panel_hover: Hsla,
@@ -29,6 +38,7 @@ impl Palette {
         let c = |hex: u32| -> Hsla { rgb(hex).into() };
         let base = if dark {
             Palette {
+                dark,
                 bg: c(0x15181b),
                 panel: c(0x1c1f25),
                 panel_hover: c(0x272b33),
@@ -40,6 +50,7 @@ impl Palette {
             }
         } else {
             Palette {
+                dark,
                 bg: c(0xf5f5f7),
                 panel: c(0xe8e8ec),
                 panel_hover: c(0xdcdce2),
@@ -69,6 +80,7 @@ impl Palette {
     fn placeholder() -> Self {
         let none = Hsla::default();
         Palette {
+            dark: false,
             bg: none,
             panel: none,
             panel_hover: none,
@@ -87,12 +99,17 @@ pub fn palette(cx: &App) -> Palette {
     *cx.global::<Palette>()
 }
 
-/// Rebuilds the palette for `appearance` and the current system accent colour.
-pub fn apply(appearance: WindowAppearance, cx: &mut App) {
-    let dark = matches!(
-        appearance,
-        WindowAppearance::Dark | WindowAppearance::VibrantDark
-    );
+/// Rebuilds the palette for the View menu choice (`system` is the system's appearance)
+/// and the current system accent colour.
+pub fn apply(system: WindowAppearance, cx: &mut App) {
+    let dark = match cx.try_global::<Choice>().map(|c| c.0) {
+        Some(Appearance::Light) => false,
+        Some(Appearance::Dark) => true,
+        _ => matches!(
+            system,
+            WindowAppearance::Dark | WindowAppearance::VibrantDark
+        ),
+    };
     let p = Palette::new(
         dark,
         platform::accent_color().unwrap_or(rgb(0x007aff).into()),

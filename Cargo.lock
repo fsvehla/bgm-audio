@@ -473,6 +473,8 @@ dependencies = [
  "objc2-core-media",
  "objc2-foundation 0.3.2",
  "objc2-media-player",
+ "raw-window-handle",
+ "rust-embed",
  "serde",
  "serde_json",
  "windows 0.62.2",

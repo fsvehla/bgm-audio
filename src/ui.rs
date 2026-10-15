@@ -42,17 +42,15 @@ impl Render for BgmApp {
             .on_action(cx.listener(|this, _: &VolumeDown, window, cx| {
                 this.set_volume(this.state.volume - 0.05, window, cx)
             }))
-            .on_action(cx.listener(|this, _: &FollowSystem, _, cx| {
-                this.set_appearance(Appearance::System, cx)
+            .on_action(cx.listener(|this, _: &FollowSystem, window, cx| {
+                this.set_appearance(Appearance::System, window, cx)
             }))
-            .on_action(
-                cx.listener(|this, _: &LightMode, _, cx| {
-                    this.set_appearance(Appearance::Light, cx)
-                }),
-            )
-            .on_action(
-                cx.listener(|this, _: &DarkMode, _, cx| this.set_appearance(Appearance::Dark, cx)),
-            )
+            .on_action(cx.listener(|this, _: &LightMode, window, cx| {
+                this.set_appearance(Appearance::Light, window, cx)
+            }))
+            .on_action(cx.listener(|this, _: &DarkMode, window, cx| {
+                this.set_appearance(Appearance::Dark, window, cx)
+            }))
             .on_action(cx.listener(|_, _: &Minimize, window, _| window.minimize_window()))
             .on_action(cx.listener(|_, _: &Zoom, window, _| window.zoom_window()))
             .on_action(
@@ -277,7 +275,18 @@ impl BgmApp {
             .flex()
             .items_center()
             .gap_2()
-            .child(side())
+            .child(side().when(!cfg!(target_os = "macos"), |el| {
+                el.child(
+                    Button::new("menu")
+                        .ghost()
+                        .icon(IconName::Ellipsis)
+                        .text_color(p.muted)
+                        .tooltip("Menu")
+                        .on_click(cx.listener(|this, event: &gpui::ClickEvent, window, cx| {
+                            this.show_window_menu(event.position(), window, cx)
+                        })),
+                )
+            }))
             .child(transport)
             .child(side().justify_end().child(toggle));
 

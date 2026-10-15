@@ -434,13 +434,33 @@ impl BgmApp {
     }
 
     /// View menu: remembered, applied to the whole app (title bar and Sparkle too).
-    pub fn set_appearance(&mut self, appearance: state::Appearance, cx: &mut Context<Self>) {
+    pub fn set_appearance(
+        &mut self,
+        appearance: state::Appearance,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+    ) {
         self.state.appearance = appearance;
         self.state.save();
         cx.set_menus(app_menus(&self.state, cx));
         platform::set_app_appearance(appearance);
+        cx.set_global(theme::Choice(appearance));
         theme::apply(cx.window_appearance(), cx);
+        platform::style_title_bar(window, theme::palette(cx).dark);
         cx.notify();
+    }
+
+    /// Windows: the app's menus as a popup from the "⋯" button. macOS has the menu bar.
+    pub fn show_window_menu(
+        &mut self,
+        position: gpui::Point<gpui::Pixels>,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+    ) {
+        #[cfg(not(target_os = "macos"))]
+        window_menu(&self.state, cx).show(position, window, cx);
+        #[cfg(target_os = "macos")]
+        let _ = (position, window, cx);
     }
 
     /// Switches between the full window and the mini player, resizing the window.
@@ -715,12 +735,36 @@ fn app_menus(state: &State, cx: &App) -> Vec<Menu> {
             "Window",
             vec![
                 MenuItem::action("Minimize", Minimize),
-                MenuItem::action("Zoom", Zoom),
+                MenuItem::action(
+                    if cfg!(target_os = "macos") {
+                        "Zoom"
+                    } else {
+                        "Maximize"
+                    },
+                    Zoom,
+                ),
                 MenuItem::separator(),
                 MenuItem::action("Mini Player", ToggleMiniPlayer).checked(state.compact),
             ],
         ),
     ]
+}
+
+/// Windows has no menu bar for GPUI menus; the "⋯" button shows this as a native popup
+/// menu instead: Open, the View/Playback/Window menus as submenus, updates and Exit.
+#[cfg(not(target_os = "macos"))]
+pub fn window_menu(state: &State, cx: &App) -> gpui_component::native_menu::NativeMenu {
+    use gpui_component::native_menu::NativeMenu;
+    let mut menu = NativeMenu::new().menu("Open…", Box::new(Open)).separator();
+    // Skip the macOS app menu (Services, Hide, Quit) and File (Open is above).
+    for m in app_menus(state, cx).into_iter().skip(2) {
+        menu = menu.submenu(m.name.clone(), NativeMenu::from(m));
+    }
+    menu = menu.separator();
+    if cx.has_global::<updater::Updater>() {
+        menu = menu.menu("Check for Updates…", Box::new(CheckForUpdates));
+    }
+    menu.menu("Exit", Box::new(Quit))
 }
 
 fn main() {
@@ -781,6 +825,7 @@ fn main() {
         let state = State::load();
         cx.set_menus(app_menus(&state, cx));
         platform::set_app_appearance(state.appearance);
+        cx.set_global(theme::Choice(state.appearance));
         theme::apply(cx.window_appearance(), cx);
         let (window_bounds, display_id) = restored_window_bounds(&state, cx);
         cx.open_window(
@@ -807,11 +852,13 @@ fn main() {
                     app._subscriptions.push(observer);
                     let appearance = cx.observe_window_appearance(window, |_, window, cx| {
                         theme::apply(window.appearance(), cx);
+                        platform::style_title_bar(window, theme::palette(cx).dark);
                         cx.notify();
                     });
                     app._subscriptions.push(appearance);
                     app
                 });
+                platform::style_title_bar(window, theme::palette(cx).dark);
                 window.focus(&view.read(cx).focus.clone(), cx);
                 view
             },

@@ -5,7 +5,8 @@
 //! - `now_playing`: system media controls and media keys; sends [`Remote`] events.
 //! - `mic::MicWatcher`: which other app, if any, is recording from a microphone.
 //! - `updater::Updater`: automatic updates, when the app is installed.
-//! - `accent_color`, `watch_accent`, `set_app_appearance`: system colours, light/dark.
+//! - `accent_color`, `watch_accent`, `set_app_appearance`, `style_title_bar`: system
+//!   colours, light/dark.
 //! - `make_bookmark`, `resolve_bookmark`: find files again after they move.
 //! - `file_url_path`: paths from file URLs the system hands to the app.
 
