@@ -48,7 +48,10 @@ actions!(
         VolumeDown,
         FollowSystem,
         LightMode,
-        DarkMode
+        DarkMode,
+        Minimize,
+        Zoom,
+        ToggleMiniPlayer
     ]
 );
 
@@ -66,7 +69,9 @@ const WINDOW_SAVE_DELAY: Duration = Duration::from_millis(500);
 const DEFAULT_WINDOW_SIZE: (f32, f32) = (440., 620.);
 /// Window height of the mini player (title bar inset, header, progress, controls).
 const COMPACT_HEIGHT: f32 = 236.;
-const MIN_WIDTH: f32 = 360.;
+/// Fits the controls row: transport buttons (with chapter buttons) plus the mini
+/// player toggle on each side's column, gaps and window padding.
+const MIN_WIDTH: f32 = 392.;
 
 /// Things that happen outside the UI: system remote commands, microphone changes.
 pub enum Event {
@@ -418,17 +423,17 @@ impl BgmApp {
         }));
     }
 
-    /// Switches between the full window and the mini player, resizing the window.
     /// View menu: remembered, applied to the whole app (title bar and Sparkle too).
     pub fn set_appearance(&mut self, appearance: state::Appearance, cx: &mut Context<Self>) {
         self.state.appearance = appearance;
         self.state.save();
-        cx.set_menus(app_menus(appearance, cx));
+        cx.set_menus(app_menus(&self.state, cx));
         theme::set_app_appearance(appearance);
         theme::apply(cx.window_appearance(), cx);
         cx.notify();
     }
 
+    /// Switches between the full window and the mini player, resizing the window.
     pub fn toggle_compact(&mut self, window: &mut gpui::Window, cx: &mut Context<Self>) {
         let current = window.viewport_size();
         let height = if self.state.compact {
@@ -439,6 +444,7 @@ impl BgmApp {
         };
         self.state.compact = !self.state.compact;
         self.state.save();
+        cx.set_menus(app_menus(&self.state, cx));
         window.resize(size(current.width, px(height)));
         cx.notify();
     }
@@ -611,7 +617,8 @@ fn restored_window_bounds(state: &State, cx: &App) -> WindowBounds {
     if let Some(w) = state.window {
         let bounds = Bounds::new(
             gpui::point(px(w.x), px(w.y)),
-            size(px(w.width), px(w.height)),
+            // Saved by an older version with a smaller minimum width.
+            size(px(w.width.max(MIN_WIDTH)), px(w.height)),
         );
         // A point inside the title bar, so the window can always be dragged.
         let grab = gpui::point(bounds.origin.x + px(60.), bounds.origin.y + px(12.));
@@ -627,9 +634,10 @@ fn restored_window_bounds(state: &State, cx: &App) -> WindowBounds {
     WindowBounds::Windowed(Bounds::centered(None, size(px(width), px(height)), cx))
 }
 
-/// The menu bar. Rebuilt when the View menu's checked item changes.
-fn app_menus(appearance: state::Appearance, cx: &App) -> Vec<Menu> {
+/// The menu bar. Rebuilt when a checked item (appearance, mini player) changes.
+fn app_menus(state: &State, cx: &App) -> Vec<Menu> {
     use state::Appearance;
+    let appearance = state.appearance;
     let menu = |name: &str, items| Menu {
         name: name.to_string().into(),
         items,
@@ -674,6 +682,16 @@ fn app_menus(appearance: state::Appearance, cx: &App) -> Vec<Menu> {
                 MenuItem::separator(),
                 MenuItem::action("Volume Up", VolumeUp),
                 MenuItem::action("Volume Down", VolumeDown),
+            ],
+        ),
+        // Named "Window", so macOS adds the window list and "Bring All to Front".
+        menu(
+            "Window",
+            vec![
+                MenuItem::action("Minimize", Minimize),
+                MenuItem::action("Zoom", Zoom),
+                MenuItem::separator(),
+                MenuItem::action("Mini Player", ToggleMiniPlayer).checked(state.compact),
             ],
         ),
     ]
@@ -721,6 +739,8 @@ fn main() {
             KeyBinding::new("shift-right", NextChapter, None),
             KeyBinding::new("up", VolumeUp, None),
             KeyBinding::new("down", VolumeDown, None),
+            KeyBinding::new("cmd-m", Minimize, None),
+            KeyBinding::new("cmd-shift-m", ToggleMiniPlayer, None),
         ]);
         cx.on_action(|_: &Quit, cx| cx.quit());
         // GPUI has no standard app menu; these mirror what Zed wires up by hand.
@@ -737,7 +757,7 @@ fn main() {
             }
         });
         let state = State::load();
-        cx.set_menus(app_menus(state.appearance, cx));
+        cx.set_menus(app_menus(&state, cx));
         theme::set_app_appearance(state.appearance);
         theme::apply(cx.window_appearance(), cx);
         let window_bounds = restored_window_bounds(&state, cx);

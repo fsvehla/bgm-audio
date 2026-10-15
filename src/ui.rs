@@ -15,10 +15,12 @@ use gpui_component::{IconName, Sizable, StyledExt};
 use crate::state::{Appearance, Tab};
 use crate::theme::{Palette, palette};
 use crate::{
-    BgmApp, DarkMode, FollowSystem, LightMode, NextChapter, Open, PrevChapter, SKIP_SECONDS,
-    SkipBack, SkipForward, TogglePlay, VolumeDown, VolumeUp,
+    BgmApp, DarkMode, FollowSystem, LightMode, Minimize, NextChapter, Open, PrevChapter,
+    SKIP_SECONDS, SkipBack, SkipForward, ToggleMiniPlayer, TogglePlay, VolumeDown, VolumeUp, Zoom,
 };
 
+/// Room for the mini player toggle (a ghost icon button) beside the transport buttons.
+const TOGGLE_WIDTH: f32 = 32.;
 /// Don't pull the progress bar back to the player position this soon after a scrub.
 const SCRUB_SETTLE: std::time::Duration = std::time::Duration::from_millis(600);
 
@@ -50,6 +52,13 @@ impl Render for BgmApp {
             )
             .on_action(
                 cx.listener(|this, _: &DarkMode, _, cx| this.set_appearance(Appearance::Dark, cx)),
+            )
+            .on_action(cx.listener(|_, _: &Minimize, window, _| window.minimize_window()))
+            .on_action(cx.listener(|_, _: &Zoom, window, _| window.zoom_window()))
+            .on_action(
+                cx.listener(|this, _: &ToggleMiniPlayer, window, cx| {
+                    this.toggle_compact(window, cx)
+                }),
             )
             .on_drop(cx.listener(|this, paths: &ExternalPaths, _, cx| {
                 if let Some(path) = paths.paths().first() {
@@ -121,6 +130,15 @@ impl BgmApp {
                 .into_any_element(),
         };
 
+        // One line; a long name loses its middle ("Lord of the Rings | Mid…, 3 Hours").
+        let subtitle_line = || {
+            div()
+                .text_xs()
+                .text_color(p.muted)
+                .overflow_hidden()
+                .whitespace_nowrap()
+                .text_ellipsis_middle()
+        };
         let header = div().flex().gap_3().items_center().child(artwork).child(
             div()
                 .flex()
@@ -138,16 +156,10 @@ impl BgmApp {
                         )),
                 )
                 .when_some(subtitle.filter(|_| self.chapter.is_none()), |el, s| {
-                    el.child(div().text_xs().text_color(p.muted).child(s))
+                    el.child(subtitle_line().child(s))
                 })
                 .when(self.chapter.is_some(), |el| {
-                    el.child(
-                        div()
-                            .text_xs()
-                            .text_color(p.muted)
-                            .line_clamp(1)
-                            .child(SharedString::from(track.title.clone())),
-                    )
+                    el.child(subtitle_line().child(SharedString::from(track.title.clone())))
                 }),
         );
 
@@ -193,38 +205,27 @@ impl BgmApp {
 
         let has_chapters = !track.chapters.is_empty();
         let compact = self.state.compact;
-        let controls = div()
-            .relative()
+        // Three columns: equal side columns keep the transport buttons centred, and the
+        // toggle gets its own space instead of floating over them in a narrow window.
+        let toggle = Button::new("compact")
+            .ghost()
+            .icon(if compact {
+                IconName::ChevronDown
+            } else {
+                IconName::ChevronUp
+            })
+            .text_color(p.muted)
+            .tooltip(if compact {
+                "Show everything"
+            } else {
+                "Mini player"
+            })
+            .on_click(cx.listener(|this, _, window, cx| this.toggle_compact(window, cx)));
+        let side = || div().flex_1().min_w(px(TOGGLE_WIDTH)).flex();
+        let transport = div()
             .flex()
+            .flex_none()
             .gap_2()
-            .justify_center()
-            .child(
-                div()
-                    .absolute()
-                    .right_0()
-                    .top_0()
-                    .bottom_0()
-                    .flex()
-                    .items_center()
-                    .child(
-                        Button::new("compact")
-                            .ghost()
-                            .icon(if compact {
-                                IconName::ChevronDown
-                            } else {
-                                IconName::ChevronUp
-                            })
-                            .text_color(p.muted)
-                            .tooltip(if compact {
-                                "Show everything"
-                            } else {
-                                "Mini player"
-                            })
-                            .on_click(
-                                cx.listener(|this, _, window, cx| this.toggle_compact(window, cx)),
-                            ),
-                    ),
-            )
             .when(has_chapters, |el| {
                 el.child(
                     Button::new("prev")
@@ -271,6 +272,13 @@ impl BgmApp {
                         .on_click(cx.listener(|this, _, _, cx| this.next_chapter(cx))),
                 )
             });
+        let controls = div()
+            .flex()
+            .items_center()
+            .gap_2()
+            .child(side())
+            .child(transport)
+            .child(side().justify_end().child(toggle));
 
         // gpui-component slider: click to jump, drag to slide. Bar colour comes from
         // bg, thumb colour from text_color.

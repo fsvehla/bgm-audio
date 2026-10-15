@@ -45,6 +45,8 @@ default audio player; to make it one, use Get Info → Open with → Change All.
 | ⇧← / ⇧→ | Previous/next chapter |
 | ↑ / ↓ | Volume |
 | ⌘O | Open |
+| ⌘⇧M | Mini player on/off (also Window → Mini Player) |
+| ⌘M | Minimize |
 
 State is kept in `~/Library/Application Support/bgm-audio/state.json`.
 
