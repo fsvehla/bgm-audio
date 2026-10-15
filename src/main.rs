@@ -1,3 +1,7 @@
+// Windows release builds are GUI programs (no console window); debug builds keep the
+// console for logs.
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
 mod platform;
 mod state;
 mod theme;
