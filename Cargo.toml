@@ -4,7 +4,6 @@ version = "0.1.4"
 edition = "2024"
 
 [dependencies]
-block2 = "0.6"
 dirs = "6"
 futures = "0.3"
 # gpui-pre: weekly snapshot of Zed's GPUI, at the exact version gpui-component pins.
@@ -13,6 +12,12 @@ gpui-component = "0.7.3"
 # Icon SVGs for gpui-component (Lucide, ISC); same release as gpui-component.
 gpui-kit-assets = "0.7.3"
 gpui_platform = { package = "gpui-pre-platform", version = "=0.3.9", default-features = false, features = ["font-kit", "runtime_shaders"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# src/platform/macos
+[target.'cfg(target_os = "macos")'.dependencies]
+block2 = "0.6"
 objc2 = "0.6"
 objc2-app-kit = "0.3"
 objc2-av-foundation = { version = "0.3", features = ["objc2-core-media"] }
@@ -21,6 +26,3 @@ objc2-core-foundation = "0.3"
 objc2-core-media = "0.3"
 objc2-foundation = "0.3"
 objc2-media-player = { version = "0.3", features = ["objc2-app-kit", "objc2-core-foundation", "objc2-av-foundation"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-

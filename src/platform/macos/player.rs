@@ -1,6 +1,6 @@
-//! Thin wrapper around AVPlayer, plus the metadata we read from the file.
+//! Playback with AVPlayer; title, artist, chapters and artwork read with AVAsset.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use objc2::MainThreadMarker;
 use objc2::rc::Retained;
@@ -11,41 +11,7 @@ use objc2_av_foundation::{
 use objc2_core_media::{CMTime, kCMTimeZero};
 use objc2_foundation::{NSArray, NSString, NSURL};
 
-#[derive(Clone, Debug)]
-pub struct Chapter {
-    pub title: String,
-    pub start: f64,
-}
-
-impl Chapter {
-    /// Chapter titles often carry credits after a comma or "·"; keep the name.
-    pub fn short_title(&self) -> String {
-        let title = &self.title;
-        let cut = title
-            .find(" · ")
-            .or_else(|| title.find(", "))
-            .unwrap_or(title.len());
-        title[..cut].trim().to_string()
-    }
-}
-
-pub struct Track {
-    pub path: PathBuf,
-    pub title: String,
-    pub artist: Option<String>,
-    pub duration: f64,
-    pub chapters: Vec<Chapter>,
-    pub artwork: Option<Vec<u8>>,
-}
-
-impl Track {
-    /// Index of the chapter that contains `position`.
-    pub fn chapter_at(&self, position: f64) -> Option<usize> {
-        self.chapters
-            .iter()
-            .rposition(|c| c.start <= position + 0.25)
-    }
-}
+use crate::track::{Chapter, Track};
 
 pub struct Player {
     av: Retained<AVPlayer>,
@@ -53,7 +19,9 @@ pub struct Player {
 }
 
 impl Player {
-    pub fn open(path: &Path, mtm: MainThreadMarker) -> Option<Self> {
+    /// Main thread only (AVPlayer).
+    pub fn open(path: &Path) -> Option<Self> {
+        let mtm = MainThreadMarker::new()?;
         if !path.is_file() {
             return None;
         }

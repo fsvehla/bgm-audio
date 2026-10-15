@@ -20,19 +20,8 @@ use objc2_media_player::{
 };
 
 use crate::Event;
-use crate::player::Track;
-
-#[derive(Debug)]
-pub enum Remote {
-    Play,
-    Pause,
-    Toggle,
-    Next,
-    Previous,
-    SkipForward,
-    SkipBackward,
-    Seek(f64),
-}
+use crate::platform::Remote;
+use crate::track::Track;
 
 /// Registers handlers for the system's remote commands. Call once, on the main thread.
 pub fn register(tx: UnboundedSender<Event>) {
@@ -84,12 +73,7 @@ pub fn use_chapter_buttons(chapters: bool) {
 }
 
 /// Publishes the current state. `artwork` is built once per track via [`artwork`].
-pub fn update(
-    track: &Track,
-    artwork: Option<&Retained<MPMediaItemArtwork>>,
-    position: f64,
-    playing: bool,
-) {
+pub fn update(track: &Track, artwork: Option<&Artwork>, position: f64, playing: bool) {
     let chapter = track.chapter_at(position);
     // With chapters, the chapter is the "song" and the file is the "album".
     let (title, album) = match chapter.map(|i| track.chapters[i].short_title()) {
@@ -137,7 +121,7 @@ pub fn update(
             );
         }
         if let Some(art) = artwork {
-            put(MPMediaItemPropertyArtwork, obj(art.clone()));
+            put(MPMediaItemPropertyArtwork, obj(art.0.clone()));
         }
 
         let info = NSDictionary::from_retained_objects(&keys, &values);
@@ -159,16 +143,21 @@ pub fn clear() {
     }
 }
 
-pub fn artwork(bytes: &[u8]) -> Option<Retained<MPMediaItemArtwork>> {
+/// Cover art in the form Now Playing wants; built once per track.
+pub struct Artwork(Retained<MPMediaItemArtwork>);
+
+pub fn artwork(bytes: &[u8]) -> Option<Artwork> {
     unsafe {
         let data = NSData::with_bytes(bytes);
         let image = NSImage::initWithData(NSImage::alloc(), &data)?;
         let size = image.size();
         let handler = RcBlock::new(move |_: CGSize| -> NonNull<NSImage> { NonNull::from(&*image) });
-        Some(MPMediaItemArtwork::initWithBoundsSize_requestHandler(
-            MPMediaItemArtwork::alloc(),
-            size,
-            &handler,
+        Some(Artwork(
+            MPMediaItemArtwork::initWithBoundsSize_requestHandler(
+                MPMediaItemArtwork::alloc(),
+                size,
+                &handler,
+            ),
         ))
     }
 }

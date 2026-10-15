@@ -7,13 +7,9 @@
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use objc2::AllocAnyThread;
-use objc2::runtime::Bool;
-use objc2_foundation::{
-    NSData, NSDataBase64DecodingOptions, NSDataBase64EncodingOptions, NSString, NSURL,
-    NSURLBookmarkCreationOptions, NSURLBookmarkResolutionOptions,
-};
 use serde::{Deserialize, Serialize};
+
+use crate::platform;
 
 const VERSION: u32 = 1;
 const MAX_RECENT: usize = 30;
@@ -98,7 +94,8 @@ pub enum WindowMode {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct FileEntry {
     pub path: PathBuf,
-    /// Base64 macOS bookmark: finds the file after it is moved or renamed.
+    /// Platform bookmark (macOS: base64 NSURL bookmark): finds the file after it is
+    /// moved or renamed.
     #[serde(default)]
     pub bookmark: Option<String>,
     pub title: String,
@@ -115,7 +112,7 @@ impl FileEntry {
             return Some(self.path.clone());
         }
         let bookmark = self.bookmark.as_deref()?;
-        resolve_bookmark(bookmark).filter(|p| p.is_file())
+        platform::resolve_bookmark(bookmark).filter(|p| p.is_file())
     }
 }
 
@@ -152,7 +149,7 @@ impl State {
             Some(i) => self.files.remove(i),
             None => FileEntry {
                 path: path.to_path_buf(),
-                bookmark: make_bookmark(path),
+                bookmark: platform::make_bookmark(path),
                 title: String::new(),
                 position: 0.0,
                 duration: 0.0,
@@ -193,38 +190,4 @@ fn now() -> u64 {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0)
-}
-
-fn make_bookmark(path: &Path) -> Option<String> {
-    let url = NSURL::fileURLWithPath(&NSString::from_str(&path.to_string_lossy()));
-    let data = url
-        .bookmarkDataWithOptions_includingResourceValuesForKeys_relativeToURL_error(
-            NSURLBookmarkCreationOptions::empty(),
-            None,
-            None,
-        )
-        .ok()?;
-    Some(
-        data.base64EncodedStringWithOptions(NSDataBase64EncodingOptions::empty())
-            .to_string(),
-    )
-}
-
-fn resolve_bookmark(base64: &str) -> Option<PathBuf> {
-    let data = NSData::initWithBase64EncodedString_options(
-        NSData::alloc(),
-        &NSString::from_str(base64),
-        NSDataBase64DecodingOptions::empty(),
-    )?;
-    let mut stale = Bool::NO;
-    let url = unsafe {
-        NSURL::URLByResolvingBookmarkData_options_relativeToURL_bookmarkDataIsStale_error(
-            &data,
-            NSURLBookmarkResolutionOptions::WithoutUI,
-            None,
-            &mut stale,
-        )
-    }
-    .ok()?;
-    url.path().map(|p| PathBuf::from(p.to_string()))
 }

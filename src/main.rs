@@ -1,10 +1,8 @@
-mod mic;
-mod now_playing;
-mod player;
+mod platform;
 mod state;
 mod theme;
+mod track;
 mod ui;
-mod updater;
 
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
@@ -20,14 +18,10 @@ use gpui::{
     actions, px, size,
 };
 use gpui_component::slider::{SliderEvent, SliderState};
-use objc2::MainThreadMarker;
-use objc2::rc::Retained;
-use objc2_foundation::{NSString, NSURL};
-use objc2_media_player::MPMediaItemArtwork;
 
-use mic::MicWatcher;
-use now_playing::Remote;
-use player::Player;
+use platform::mic::MicWatcher;
+use platform::player::Player;
+use platform::{Remote, now_playing, updater};
 use state::State;
 
 actions!(
@@ -86,7 +80,7 @@ pub enum Event {
 pub struct BgmApp {
     state: State,
     player: Option<Player>,
-    artwork_np: Option<Retained<MPMediaItemArtwork>>,
+    artwork_np: Option<now_playing::Artwork>,
     artwork_ui: Option<Arc<Image>>,
     chapter: Option<usize>,
     mic: MicWatcher,
@@ -120,7 +114,7 @@ impl BgmApp {
         cx: &mut Context<Self>,
     ) -> Self {
         now_playing::register(tx.clone());
-        theme::watch_accent(tx.clone());
+        platform::watch_accent(tx.clone());
 
         let events = cx.spawn(async move |this, cx| {
             while let Some(event) = rx.next().await {
@@ -216,10 +210,7 @@ impl BgmApp {
         if let Some(old) = self.player.take() {
             old.pause();
         }
-        let Some(mtm) = MainThreadMarker::new() else {
-            return;
-        };
-        let Some(player) = Player::open(path, mtm) else {
+        let Some(player) = Player::open(path) else {
             self.error = Some(format!("Can't play {}", path.display()));
             cx.notify();
             return;
@@ -438,7 +429,7 @@ impl BgmApp {
         self.state.appearance = appearance;
         self.state.save();
         cx.set_menus(app_menus(&self.state, cx));
-        theme::set_app_appearance(appearance);
+        platform::set_app_appearance(appearance);
         theme::apply(cx.window_appearance(), cx);
         cx.notify();
     }
@@ -723,15 +714,6 @@ fn app_menus(state: &State, cx: &App) -> Vec<Menu> {
     ]
 }
 
-/// The local path of a `file://` URL from the system.
-fn file_url_path(url: &str) -> Option<PathBuf> {
-    let url = NSURL::URLWithString(&NSString::from_str(url))?;
-    if !url.isFileURL() {
-        return None;
-    }
-    Some(PathBuf::from(url.path()?.to_string()))
-}
-
 fn main() {
     let open_path = file_argument();
     // Created before launch: macOS can deliver opened files before the window exists.
@@ -740,7 +722,7 @@ fn main() {
 
     let app = gpui_platform::application().with_assets(gpui_kit_assets::Assets);
     app.on_open_urls(move |urls| {
-        for path in urls.iter().filter_map(|url| file_url_path(url)) {
+        for path in urls.iter().filter_map(|url| platform::file_url_path(url)) {
             tx.unbounded_send(Event::OpenFile(path)).ok();
         }
     });
@@ -784,7 +766,7 @@ fn main() {
         });
         let state = State::load();
         cx.set_menus(app_menus(&state, cx));
-        theme::set_app_appearance(state.appearance);
+        platform::set_app_appearance(state.appearance);
         theme::apply(cx.window_appearance(), cx);
         let (window_bounds, display_id) = restored_window_bounds(&state, cx);
         cx.open_window(

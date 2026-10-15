@@ -39,3 +39,9 @@ Next
 - [x] Sparkle updates: packaging/release.sh publishes zip + appcast.xml per GitHub release
 - [x] Homebrew: fsvehla/tap/ambience (auto_updates), bumped by release.sh
 - [ ] Menu bar extra instead of / in addition to the window?
+
+Windows (maybe)
+- [x] macOS code behind src/platform (player, now_playing, mic, updater, appearance, files)
+- [ ] Test VM: VMware Fusion + Windows 11 Arm (snapshot "clean"), plus the real PC over SSH
+- [ ] src/platform/windows: playback + chapters, SMTC, mic (WASAPI capture sessions), accent, WinSparkle
+- [ ] CI: windows-11-arm build on GitHub Actions
