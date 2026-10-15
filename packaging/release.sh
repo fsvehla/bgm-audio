@@ -106,3 +106,14 @@ fi
 gh release create "$tag" "$out/$zip_name" "$out/appcast.xml" --repo "$repo" \
   --target "$(git rev-parse HEAD)" --title "Ambience $version" --notes-file "$out/notes.md"
 echo "https://github.com/$repo/releases/tag/$tag"
+
+# Homebrew: point the cask in fsvehla/homebrew-tap at this release. The cask has
+# auto_updates (Sparkle), so this only matters for fresh installs.
+tap=$(mktemp -d)
+trap 'rm -rf "$tap"' EXIT
+git clone -q git@github.com:fsvehla/homebrew-tap.git "$tap"
+perl -pi -e "s/^  version \".*\"/  version \"$version\"/; s/^  sha256 \".*\"/  sha256 \"$sha\"/" \
+  "$tap/Casks/ambience.rb"
+git -C "$tap" commit -q -am "ambience $version"
+git -C "$tap" push -q
+echo "cask: fsvehla/tap/ambience $version" >&2

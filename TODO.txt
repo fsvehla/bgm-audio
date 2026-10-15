@@ -35,4 +35,5 @@ Next
 - [x] Colours follow the system: light/dark appearance + accent colour (live)
 - [x] Display name "Ambience" (Dock, menus, window, Ambience.app); bundle ID, state folder and crate stay bgm-audio
 - [x] Sparkle updates: packaging/release.sh publishes zip + appcast.xml per GitHub release
+- [x] Homebrew: fsvehla/tap/ambience (auto_updates), bumped by release.sh
 - [ ] Menu bar extra instead of / in addition to the window?
