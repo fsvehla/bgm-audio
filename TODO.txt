@@ -44,4 +44,5 @@ Windows (maybe)
 - [x] macOS code behind src/platform (player, now_playing, mic, updater, appearance, files)
 - [ ] Test VM: VMware Fusion + Windows 11 Arm (snapshot "clean"), plus the real PC over SSH
 - [ ] src/platform/windows: playback + chapters, SMTC, mic (WASAPI capture sessions), accent, WinSparkle
-- [ ] CI: windows-11-arm build on GitHub Actions
+- [ ] Targets: aarch64-pc-windows-msvc (test VM) and x86_64-pc-windows-msvc (gaming PC); one artifact per arch
+- [ ] CI: windows-11-arm and windows-latest (x64) builds on GitHub Actions
