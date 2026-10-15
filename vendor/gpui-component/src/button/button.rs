@@ -1,3 +1,4 @@
+// Modified for bgm-audio (2026-10-15): hover text colour fixed (was crate::red_400()); see vendor/README.
 use std::rc::Rc;
 
 use crate::{
