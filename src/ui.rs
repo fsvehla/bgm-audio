@@ -10,7 +10,7 @@ use gpui_component::scroll::ScrollableElement;
 use gpui_component::slider::Slider;
 use gpui_component::switch::Switch;
 use gpui_component::tab::{Tab as TabItem, TabBar};
-use gpui_component::{IconName, Sizable, StyledExt};
+use gpui_component::{Icon, IconName, Sizable, StyledExt};
 
 use crate::state::{Appearance, Tab};
 use crate::theme::{Palette, palette};
@@ -230,7 +230,7 @@ impl BgmApp {
                     Button::new("prev")
                         .small()
                         .h_8()
-                        .label("⏮")
+                        .icon(Icon::new(gpui_kit_assets::IconName::SkipBack))
                         .tooltip("Previous chapter")
                         .on_click(cx.listener(|this, _, _, cx| this.prev_chapter(cx))),
                 )
@@ -266,7 +266,7 @@ impl BgmApp {
                     Button::new("next")
                         .small()
                         .h_8()
-                        .label("⏭")
+                        .icon(Icon::new(gpui_kit_assets::IconName::SkipForward))
                         .tooltip("Next chapter")
                         .on_click(cx.listener(|this, _, _, cx| this.next_chapter(cx))),
                 )

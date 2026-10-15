@@ -2,6 +2,7 @@
 // console for logs.
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
+mod assets;
 mod platform;
 mod state;
 mod theme;
@@ -773,7 +774,7 @@ fn main() {
     let (tx, rx) = futures::channel::mpsc::unbounded::<Event>();
     let events = Rc::new(RefCell::new(Some((tx.clone(), rx))));
 
-    let app = gpui_platform::application().with_assets(gpui_kit_assets::Assets);
+    let app = gpui_platform::application().with_assets(assets::AppAssets);
     app.on_open_urls(move |urls| {
         for path in urls.iter().filter_map(|url| platform::file_url_path(url)) {
             tx.unbounded_send(Event::OpenFile(path)).ok();
