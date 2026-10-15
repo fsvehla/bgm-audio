@@ -42,6 +42,10 @@ impl Player {
             }
         };
 
+        if let Err(e) = super::now_playing::attach(&player) {
+            eprintln!("Ambience: media controls: {e}");
+        }
+
         let ended = Arc::new(AtomicBool::new(false));
         let flag = ended.clone();
         player

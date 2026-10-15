@@ -36,4 +36,16 @@ impl Track {
             .iter()
             .rposition(|c| c.start <= position + 0.25)
     }
+
+    /// Title and album for the system's media controls at `position`. With chapters,
+    /// the chapter is the "song" and the file is the "album".
+    pub fn now_playing_titles(&self, position: f64) -> (String, Option<String>) {
+        match self
+            .chapter_at(position)
+            .map(|i| self.chapters[i].short_title())
+        {
+            Some(t) if !t.is_empty() => (t, Some(self.title.clone())),
+            _ => (self.title.clone(), None),
+        }
+    }
 }

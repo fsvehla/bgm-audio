@@ -1,4 +1,4 @@
-//! Windows. Same names as `platform::macos`. Done: `player`. The rest does nothing yet,
+//! Windows. Same names as `platform::macos`. Done: `player`, `now_playing`. The rest does nothing yet,
 //! so the app builds and its UI runs; each piece gets a real implementation later.
 
 use std::path::{Path, PathBuf};
@@ -11,22 +11,7 @@ use crate::state::Appearance;
 
 pub mod player;
 
-pub mod now_playing {
-    use futures::channel::mpsc::UnboundedSender;
-
-    use crate::Event;
-    use crate::track::Track;
-
-    pub struct Artwork;
-
-    pub fn register(_tx: UnboundedSender<Event>) {}
-    pub fn use_chapter_buttons(_chapters: bool) {}
-    pub fn update(_track: &Track, _artwork: Option<&Artwork>, _position: f64, _playing: bool) {}
-    pub fn clear() {}
-    pub fn artwork(_bytes: &[u8]) -> Option<Artwork> {
-        None
-    }
-}
+pub mod now_playing;
 
 pub mod mic {
     use futures::channel::mpsc::UnboundedSender;

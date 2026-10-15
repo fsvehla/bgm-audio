@@ -75,11 +75,7 @@ pub fn use_chapter_buttons(chapters: bool) {
 /// Publishes the current state. `artwork` is built once per track via [`artwork`].
 pub fn update(track: &Track, artwork: Option<&Artwork>, position: f64, playing: bool) {
     let chapter = track.chapter_at(position);
-    // With chapters, the chapter is the "song" and the file is the "album".
-    let (title, album) = match chapter.map(|i| track.chapters[i].short_title()) {
-        Some(t) if !t.is_empty() => (t, Some(track.title.clone())),
-        _ => (track.title.clone(), None),
-    };
+    let (title, album) = track.now_playing_titles(position);
 
     let mut keys: Vec<&NSString> = Vec::new();
     let mut values: Vec<Retained<AnyObject>> = Vec::new();
