@@ -510,9 +510,12 @@ impl BgmApp {
                                 .label("×")
                                 .text_color(p.muted)
                                 .tooltip("Remove from list")
-                                .on_click(
-                                    cx.listener(move |this, _, _, cx| this.forget_recent(i, cx)),
-                                ),
+                                // The row opens the entry on click; don't let this click
+                                // reach it, or it opens the entry that moves into place.
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    cx.stop_propagation();
+                                    this.forget_recent(i, cx)
+                                })),
                         )
                         .on_click(cx.listener(move |this, _, _, cx| this.open_recent(i, cx)))
                     }),
