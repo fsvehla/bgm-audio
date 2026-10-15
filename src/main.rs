@@ -12,9 +12,9 @@ use std::time::Duration;
 
 use futures::StreamExt;
 use gpui::{
-    App, AppContext, Application, Bounds, Context, Entity, FocusHandle, Image, ImageFormat,
-    KeyBinding, Menu, MenuItem, PathPromptOptions, SystemMenuType, Task, Window, WindowBounds,
-    WindowOptions, actions, px, size,
+    App, AppContext, Bounds, Context, Entity, FocusHandle, Image, ImageFormat, KeyBinding, Menu,
+    MenuItem, PathPromptOptions, SystemMenuType, Task, Window, WindowBounds, WindowOptions,
+    actions, px, size,
 };
 use gpui_component::slider::{SliderEvent, SliderState};
 use objc2::MainThreadMarker;
@@ -137,13 +137,13 @@ impl BgmApp {
                 .default_value(state.volume)
         });
         let volume_changed = cx.subscribe(&volume_slider, |this, _, event: &SliderEvent, cx| {
-            let SliderEvent::Change(value) = event;
+            let (SliderEvent::Change(value) | SliderEvent::Release(value)) = event;
             this.apply_volume(value.end(), cx);
         });
 
         let progress_slider = cx.new(|_| SliderState::new().min(0.0).max(1.0).step(0.0001));
         let scrubbed = cx.subscribe(&progress_slider, |this, _, event: &SliderEvent, cx| {
-            let SliderEvent::Change(value) = event;
+            let (SliderEvent::Change(value) | SliderEvent::Release(value)) = event;
             let Some(duration) = this.player.as_ref().map(|p| p.track.duration) else {
                 return;
             };
@@ -410,14 +410,10 @@ impl BgmApp {
 
     /// Switches between the full window and the mini player, resizing the window.
     /// View menu: remembered, applied to the whole app (title bar and Sparkle too).
-    pub fn set_appearance(
-        &mut self,
-        appearance: state::Appearance,
-        window: &mut gpui::Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn set_appearance(&mut self, appearance: state::Appearance, cx: &mut Context<Self>) {
         self.state.appearance = appearance;
         self.state.save();
+        cx.set_menus(app_menus(appearance, cx));
         theme::set_app_appearance(appearance);
         theme::apply(cx.window_appearance(), cx);
         cx.notify();
@@ -617,10 +613,62 @@ fn restored_window_bounds(state: &State, cx: &App) -> WindowBounds {
     WindowBounds::Windowed(Bounds::centered(None, size(px(width), px(height)), cx))
 }
 
+/// The menu bar. Rebuilt when the View menu's checked item changes.
+fn app_menus(appearance: state::Appearance, cx: &App) -> Vec<Menu> {
+    use state::Appearance;
+    let menu = |name: &str, items| Menu {
+        name: name.to_string().into(),
+        items,
+        disabled: false,
+    };
+    // Sparkle only exists inside the .app bundle; without it there is no menu item.
+    let mut app_menu = Vec::new();
+    if cx.has_global::<updater::Updater>() {
+        app_menu.push(MenuItem::action("Check for Updates…", CheckForUpdates));
+        app_menu.push(MenuItem::separator());
+    }
+    app_menu.extend([
+        MenuItem::os_submenu("Services", SystemMenuType::Services),
+        MenuItem::separator(),
+        MenuItem::action(format!("Hide {APP_NAME}"), Hide),
+        MenuItem::action("Hide Others", HideOthers),
+        MenuItem::action("Show All", ShowAll),
+        MenuItem::separator(),
+        MenuItem::action(format!("Quit {APP_NAME}"), Quit),
+    ]);
+    vec![
+        menu(APP_NAME, app_menu),
+        menu("File", vec![MenuItem::action("Open…", Open)]),
+        menu(
+            "View",
+            vec![
+                MenuItem::action("Follow System", FollowSystem)
+                    .checked(appearance == Appearance::System),
+                MenuItem::action("Light Mode", LightMode).checked(appearance == Appearance::Light),
+                MenuItem::action("Dark Mode", DarkMode).checked(appearance == Appearance::Dark),
+            ],
+        ),
+        menu(
+            "Playback",
+            vec![
+                MenuItem::action("Play/Pause", TogglePlay),
+                MenuItem::separator(),
+                MenuItem::action("Back 10s", SkipBack),
+                MenuItem::action("Forward 10s", SkipForward),
+                MenuItem::action("Previous Chapter", PrevChapter),
+                MenuItem::action("Next Chapter", NextChapter),
+                MenuItem::separator(),
+                MenuItem::action("Volume Up", VolumeUp),
+                MenuItem::action("Volume Down", VolumeDown),
+            ],
+        ),
+    ]
+}
+
 fn main() {
     let open_path = file_argument();
 
-    Application::new().run(move |cx: &mut App| {
+    gpui_platform::application().run(move |cx: &mut App| {
         gpui_component::init(cx);
         theme::apply(cx.window_appearance(), cx);
         // gpui-component resets its theme from its registry once effects flush (and on
@@ -648,70 +696,16 @@ fn main() {
         cx.on_action(|_: &HideOthers, cx| cx.hide_other_apps());
         cx.on_action(|_: &ShowAll, cx| cx.unhide_other_apps());
 
-        // Sparkle only exists inside the .app bundle; without it there is no menu item.
-        let has_updater = match updater::Updater::start() {
-            Some(updater) => {
-                cx.set_global(updater);
-                true
-            }
-            None => false,
-        };
+        if let Some(updater) = updater::Updater::start() {
+            cx.set_global(updater);
+        }
         cx.on_action(|_: &CheckForUpdates, cx| {
             if let Some(updater) = cx.try_global::<updater::Updater>() {
                 updater.check_for_updates();
             }
         });
-        let mut app_menu = Vec::new();
-        if has_updater {
-            app_menu.push(MenuItem::action("Check for Updates…", CheckForUpdates));
-            app_menu.push(MenuItem::separator());
-        }
-
-        cx.set_menus(vec![
-            Menu {
-                name: APP_NAME.into(),
-                items: app_menu
-                    .into_iter()
-                    .chain([
-                        MenuItem::os_submenu("Services", SystemMenuType::Services),
-                        MenuItem::separator(),
-                        MenuItem::action(format!("Hide {APP_NAME}"), Hide),
-                        MenuItem::action("Hide Others", HideOthers),
-                        MenuItem::action("Show All", ShowAll),
-                        MenuItem::separator(),
-                        MenuItem::action(format!("Quit {APP_NAME}"), Quit),
-                    ])
-                    .collect(),
-            },
-            Menu {
-                name: "File".into(),
-                items: vec![MenuItem::action("Open…", Open)],
-            },
-            Menu {
-                name: theme::VIEW_MENU.into(),
-                items: vec![
-                    MenuItem::action(theme::FOLLOW_SYSTEM, FollowSystem),
-                    MenuItem::action(theme::LIGHT_MODE, LightMode),
-                    MenuItem::action(theme::DARK_MODE, DarkMode),
-                ],
-            },
-            Menu {
-                name: "Playback".into(),
-                items: vec![
-                    MenuItem::action("Play/Pause", TogglePlay),
-                    MenuItem::separator(),
-                    MenuItem::action("Back 10s", SkipBack),
-                    MenuItem::action("Forward 10s", SkipForward),
-                    MenuItem::action("Previous Chapter", PrevChapter),
-                    MenuItem::action("Next Chapter", NextChapter),
-                    MenuItem::separator(),
-                    MenuItem::action("Volume Up", VolumeUp),
-                    MenuItem::action("Volume Down", VolumeDown),
-                ],
-            },
-        ]);
-
         let state = State::load();
+        cx.set_menus(app_menus(state.appearance, cx));
         theme::set_app_appearance(state.appearance);
         theme::apply(cx.window_appearance(), cx);
         let window_bounds = restored_window_bounds(&state, cx);
@@ -740,12 +734,12 @@ fn main() {
                     app._subscriptions.push(appearance);
                     app
                 });
-                window.focus(&view.read(cx).focus.clone());
+                window.focus(&view.read(cx).focus.clone(), cx);
                 view
             },
         )
         .unwrap();
-        cx.on_window_closed(|cx| cx.quit()).detach();
+        cx.on_window_closed(|cx, _| cx.quit()).detach();
         cx.activate(true);
     });
 }

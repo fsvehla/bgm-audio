@@ -40,15 +40,17 @@ impl Render for BgmApp {
             .on_action(cx.listener(|this, _: &VolumeDown, window, cx| {
                 this.set_volume(this.state.volume - 0.05, window, cx)
             }))
-            .on_action(cx.listener(|this, _: &FollowSystem, window, cx| {
-                this.set_appearance(Appearance::System, window, cx)
+            .on_action(cx.listener(|this, _: &FollowSystem, _, cx| {
+                this.set_appearance(Appearance::System, cx)
             }))
-            .on_action(cx.listener(|this, _: &LightMode, window, cx| {
-                this.set_appearance(Appearance::Light, window, cx)
-            }))
-            .on_action(cx.listener(|this, _: &DarkMode, window, cx| {
-                this.set_appearance(Appearance::Dark, window, cx)
-            }))
+            .on_action(
+                cx.listener(|this, _: &LightMode, _, cx| {
+                    this.set_appearance(Appearance::Light, cx)
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &DarkMode, _, cx| this.set_appearance(Appearance::Dark, cx)),
+            )
             .on_drop(cx.listener(|this, paths: &ExternalPaths, _, cx| {
                 if let Some(path) = paths.paths().first() {
                     this.open(&path.clone(), true, cx);

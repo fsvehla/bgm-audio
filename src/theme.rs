@@ -11,18 +11,12 @@ use gpui_component::{Theme, ThemeMode};
 use objc2::MainThreadMarker;
 use objc2_app_kit::{
     NSAppearance, NSAppearanceNameAqua, NSAppearanceNameDarkAqua, NSApplication, NSColor,
-    NSColorSpace, NSControlStateValueOff, NSControlStateValueOn,
-    NSSystemColorsDidChangeNotification,
+    NSColorSpace, NSSystemColorsDidChangeNotification,
 };
-use objc2_foundation::{NSNotification, NSNotificationCenter, NSOperationQueue, NSString};
+use objc2_foundation::{NSNotification, NSNotificationCenter, NSOperationQueue};
 
 use crate::Event;
 use crate::state::Appearance;
-
-pub const VIEW_MENU: &str = "View";
-pub const FOLLOW_SYSTEM: &str = "Follow System";
-pub const LIGHT_MODE: &str = "Light Mode";
-pub const DARK_MODE: &str = "Dark Mode";
 
 #[derive(Clone, Copy)]
 pub struct Palette {
@@ -114,49 +108,63 @@ pub fn apply(appearance: WindowAppearance, cx: &mut App) {
     let p = Palette::new(dark, system_accent().unwrap_or(rgb(0x007aff).into()));
     cx.set_global(p);
 
-    let theme = Theme::global_mut(cx);
-    theme.mode = if dark {
+    // `change` loads gpui-component's own light/dark theme; `update` then writes our
+    // colours over it and keeps its token copy, the Base layer and windows in step.
+    let mode = if dark {
         ThemeMode::Dark
     } else {
         ThemeMode::Light
     };
-    theme.shadow = false;
-    let t = &mut theme.colors;
-    t.background = p.bg;
-    t.foreground = p.text;
-    t.border = p.panel_hover;
-    t.ring = p.accent;
-    t.primary = p.accent;
-    t.primary_hover = p.accent_hover;
-    t.primary_active = p.accent;
-    t.primary_foreground = p.on_accent;
-    t.secondary = p.panel;
-    t.secondary_hover = p.panel_hover;
-    t.secondary_active = p.panel_hover;
-    t.secondary_foreground = p.text;
-    t.muted = p.panel;
-    t.muted_foreground = p.muted;
-    t.accent = p.panel_hover;
-    t.accent_foreground = p.text;
-    t.danger = p.warn;
-    t.switch = p.panel_hover;
-    t.switch_thumb = rgb(0xffffff).into();
-    t.slider_bar = p.accent;
-    t.slider_thumb = rgb(0xffffff).into();
-    t.tab_bar = p.panel;
-    t.tab_bar_segmented = p.panel;
-    t.tab = p.panel;
-    t.tab_active = p.bg;
-    t.tab_foreground = p.muted;
-    t.tab_active_foreground = p.text;
-    t.scrollbar = Hsla::transparent_black();
-    t.scrollbar_thumb = p.muted.opacity(0.5);
-    t.scrollbar_thumb_hover = p.muted;
-    t.list_hover = p.panel_hover;
-    t.selection = p.accent.opacity(0.3);
+    if Theme::global(cx).mode != mode {
+        Theme::change(mode, None, cx);
+    }
+    Theme::update(cx, |theme| {
+        theme.shadow = false;
+        let t = &mut theme.colors;
+        t.background = p.bg;
+        t.foreground = p.text;
+        t.border = p.panel_hover;
+        t.ring = p.accent;
+        t.primary = p.accent;
+        t.primary_hover = p.accent_hover;
+        t.primary_active = p.accent;
+        t.primary_foreground = p.on_accent;
+        t.secondary = p.panel;
+        t.secondary_hover = p.panel_hover;
+        t.secondary_active = p.panel_hover;
+        t.secondary_foreground = p.text;
+        t.button = p.panel;
+        t.button_hover = p.panel_hover;
+        t.button_active = p.panel_hover;
+        t.button_foreground = p.text;
+        t.button_primary = p.accent;
+        t.button_primary_hover = p.accent_hover;
+        t.button_primary_active = p.accent;
+        t.button_primary_foreground = p.on_accent;
+        t.muted = p.panel;
+        t.muted_foreground = p.muted;
+        t.accent = p.panel_hover;
+        t.accent_foreground = p.text;
+        t.danger = p.warn;
+        t.switch = p.panel_hover;
+        t.switch_thumb = rgb(0xffffff).into();
+        t.slider_bar = p.accent;
+        t.slider_thumb = rgb(0xffffff).into();
+        t.tab_bar = p.panel;
+        t.tab_bar_segmented = p.panel;
+        t.tab = p.panel;
+        t.tab_active = p.bg;
+        t.tab_foreground = p.muted;
+        t.tab_active_foreground = p.text;
+        t.scrollbar = Hsla::transparent_black();
+        t.scrollbar_thumb = p.muted.opacity(0.5);
+        t.scrollbar_thumb_hover = p.muted;
+        t.list_hover = p.panel_hover;
+        t.selection = p.accent.opacity(0.3);
+    });
 }
 
-/// Sets `NSApp.appearance` (nil follows the system) and checkmarks the View menu.
+/// Sets `NSApp.appearance` (nil follows the system).
 /// Windows then report the new appearance, which `apply` turns into the palette.
 pub fn set_app_appearance(choice: Appearance) {
     let Some(mtm) = MainThreadMarker::new() else {
@@ -171,28 +179,6 @@ pub fn set_app_appearance(choice: Appearance) {
         }
     };
     app.setAppearance(appearance.as_deref());
-
-    // GPUI menus have no checked state; set it on the NSMenuItems it built.
-    let Some(view) = app
-        .mainMenu()
-        .and_then(|menu| menu.itemWithTitle(&NSString::from_str(VIEW_MENU)))
-        .and_then(|item| item.submenu())
-    else {
-        return;
-    };
-    for (title, value) in [
-        (FOLLOW_SYSTEM, Appearance::System),
-        (LIGHT_MODE, Appearance::Light),
-        (DARK_MODE, Appearance::Dark),
-    ] {
-        if let Some(item) = view.itemWithTitle(&NSString::from_str(title)) {
-            item.setState(if value == choice {
-                NSControlStateValueOn
-            } else {
-                NSControlStateValueOff
-            });
-        }
-    }
 }
 
 /// `NSColor.controlAccentColor` in sRGB: the accent colour picked in System Settings

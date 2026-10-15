@@ -56,7 +56,8 @@ packaging/bundle.sh release            # target/release/Ambience.app
 `bundle.sh` signs with a Developer ID certificate from the keychain if there is
 one. `NOTARIZE=1` also notarizes (notarytool keychain profile `notary`).
 
-`vendor/gpui-component` is a patched copy, see [vendor/README](vendor/README).
+GPUI comes from `gpui-pre` (weekly snapshots of Zed's GPUI) at the exact version
+gpui-component pins; bump both together.
 
 ## Release
 

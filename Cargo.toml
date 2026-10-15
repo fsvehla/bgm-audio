@@ -7,8 +7,10 @@ edition = "2024"
 block2 = "0.6"
 dirs = "6"
 futures = "0.3"
-gpui = { version = "0.2.2", default-features = false, features = ["font-kit", "runtime_shaders"] }
-gpui-component = "0.5.1"
+# gpui-pre: weekly snapshot of Zed's GPUI, at the exact version gpui-component pins.
+gpui = { package = "gpui-pre", version = "=0.3.9", default-features = false, features = ["font-kit"] }
+gpui-component = "0.7.3"
+gpui_platform = { package = "gpui-pre-platform", version = "=0.3.9", default-features = false, features = ["font-kit", "runtime_shaders"] }
 objc2 = "0.6"
 objc2-app-kit = "0.3"
 objc2-av-foundation = { version = "0.3", features = ["objc2-core-media"] }
@@ -20,7 +22,3 @@ objc2-media-player = { version = "0.3", features = ["objc2-app-kit", "objc2-core
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
-# gpui-component 0.5.1 (the last release on crates.io gpui 0.2.2) with one fix:
-# hovered buttons turned their text red (button.rs, hover style). See vendor/README.
-[patch.crates-io]
-gpui-component = { path = "vendor/gpui-component" }

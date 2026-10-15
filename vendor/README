@@ -1,4 +1,0 @@
-gpui-component/  gpui-component 0.5.1 from crates.io, Apache-2.0 (see its LICENSE-APACHE).
-                 Patched: src/button/button.rs hover style used `crate::red_400()` as the
-                 text colour; now `hover_style.fg`. Later releases (0.6+) need the gpui-pre
-                 fork instead of gpui 0.2.2, so this stays until we move GPUI.
