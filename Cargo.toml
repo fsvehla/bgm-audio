@@ -5,6 +5,8 @@ edition = "2024"
 
 [dependencies]
 dirs = "6"
+# Decoding and scaling artwork (ui.rs); already in the tree through GPUI.
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
 dunce = "1"
 futures = "0.3"
 # gpui-pre: weekly snapshot of Zed's GPUI, at the exact version gpui-component pins.

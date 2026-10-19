@@ -18,9 +18,9 @@ use std::time::Duration;
 use futures::StreamExt;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use gpui::{
-    App, AppContext, Bounds, Context, Entity, FocusHandle, Image, ImageFormat, KeyBinding, Menu,
-    MenuItem, PathPromptOptions, SystemMenuType, Task, Window, WindowBounds, WindowOptions,
-    actions, px, size,
+    App, AppContext, Bounds, Context, Entity, FocusHandle, KeyBinding, Menu, MenuItem,
+    PathPromptOptions, SystemMenuType, Task, Window, WindowBounds, WindowOptions, actions, px,
+    size,
 };
 use gpui_component::slider::{SliderEvent, SliderState};
 
@@ -69,9 +69,9 @@ const DEFAULT_WINDOW_SIZE: (f32, f32) = (440., 620.);
 /// Window height of the mini player (title bar inset, header, progress, controls).
 /// The macOS content starts under the title bar; elsewhere the inset is 24 smaller.
 const COMPACT_HEIGHT: f32 = if cfg!(target_os = "macos") {
-    236.
+    228.
 } else {
-    212.
+    198.
 };
 /// Fits the controls row: transport buttons (with chapter buttons) plus the mini
 /// player toggle on each side's column, gaps and window padding.
@@ -93,7 +93,10 @@ pub struct BgmApp {
     state: State,
     player: Option<Player>,
     artwork_np: Option<now_playing::Artwork>,
-    artwork_ui: Option<Arc<Image>>,
+    /// The track's artwork at full size; ui.rs scales it down for the screen.
+    artwork: Option<image::RgbaImage>,
+    /// `artwork` scaled for the window's scale factor (the factor it was made for).
+    artwork_ui: Option<(f32, Arc<gpui::RenderImage>)>,
     chapter: Option<usize>,
     mic: MicWatcher,
     /// Bundle ID of the app that is currently recording, if any.
@@ -188,6 +191,7 @@ impl BgmApp {
             state,
             player: None,
             artwork_np: None,
+            artwork: None,
             artwork_ui: None,
             chapter: None,
             mic: MicWatcher::new(tx),
@@ -251,12 +255,15 @@ impl BgmApp {
 
         let track = &player.track;
         self.artwork_np = track.artwork.as_deref().and_then(now_playing::artwork);
-        self.artwork_ui = track.artwork.as_ref().and_then(|bytes| {
-            Some(Arc::new(Image::from_bytes(
-                image_format(bytes)?,
-                bytes.clone(),
-            )))
-        });
+        self.artwork = track
+            .artwork
+            .as_deref()
+            .and_then(|bytes| image::load_from_memory(bytes).ok())
+            .map(|image| image.into_rgba8());
+        // Outside a window update, so this reaches every window's sprite atlas.
+        if let Some((_, old)) = self.artwork_ui.take() {
+            cx.drop_image(old, None);
+        }
         self.chapter = track.chapter_at(resume);
         now_playing::use_chapter_buttons(!track.chapters.is_empty());
         self.state.touch(path, &track.title, saved, track.duration);
@@ -618,29 +625,6 @@ impl BgmApp {
             let position = position.unwrap_or_else(|| player.position());
             now_playing::update(&player.track, self.artwork_np.as_ref(), position, playing);
         }
-    }
-}
-
-fn image_format(bytes: &[u8]) -> Option<ImageFormat> {
-    match bytes {
-        [0x89, b'P', b'N', b'G', ..] => Some(ImageFormat::Png),
-        [0xFF, 0xD8, ..] => Some(ImageFormat::Jpeg),
-        [
-            b'R',
-            b'I',
-            b'F',
-            b'F',
-            _,
-            _,
-            _,
-            _,
-            b'W',
-            b'E',
-            b'B',
-            b'P',
-            ..,
-        ] => Some(ImageFormat::Webp),
-        _ => None,
     }
 }
 

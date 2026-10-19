@@ -2,8 +2,8 @@
 
 use gpui::{
     AnyElement, Context, ExternalPaths, FontFeatures, FontWeight, InteractiveElement, IntoElement,
-    ParentElement, Render, SharedString, StatefulInteractiveElement, Styled, Window, div, img,
-    prelude::*, px, relative,
+    ParentElement, Render, RenderImage, SharedString, StatefulInteractiveElement, Styled, Window,
+    div, img, prelude::*, px, relative,
 };
 use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::scroll::ScrollableElement;
@@ -23,6 +23,46 @@ use crate::{
 const TOGGLE_WIDTH: f32 = 32.;
 /// Don't pull the progress bar back to the player position this soon after a scrub.
 const SCRUB_SETTLE: std::time::Duration = std::time::Duration::from_millis(600);
+
+/// The box the artwork is fitted into, in points: wide enough for a 16:9 video
+/// thumbnail, low enough to keep the header (and the mini player) short.
+const ARTWORK_BOX: (f32, f32) = (96., 64.);
+
+impl BgmApp {
+    /// The artwork scaled to the pixels it covers on screen, and its size in points.
+    /// GPUI draws images with plain bilinear filtering, so a big cover (often 1280×720)
+    /// drawn at 84 points aliases badly; a Lanczos resize up front keeps it smooth.
+    fn artwork_image(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<(std::sync::Arc<RenderImage>, gpui::Size<gpui::Pixels>)> {
+        let source = self.artwork.as_ref()?;
+        let (w, h) = (source.width() as f32, source.height() as f32);
+        let fit = (ARTWORK_BOX.0 / w).min(ARTWORK_BOX.1 / h);
+        let points = gpui::size(px(w * fit), px(h * fit));
+        let scale = window.scale_factor();
+        if self.artwork_ui.as_ref().is_none_or(|(s, _)| *s != scale) {
+            let pixels = |v: f32| ((v * fit * scale).round() as u32).max(1);
+            let mut scaled = image::imageops::resize(
+                source,
+                pixels(w),
+                pixels(h),
+                image::imageops::FilterType::Lanczos3,
+            );
+            // GPUI wants BGRA.
+            for pixel in scaled.chunks_exact_mut(4) {
+                pixel.swap(0, 2);
+            }
+            let image = std::sync::Arc::new(RenderImage::new([image::Frame::new(scaled)]));
+            if let Some((_, old)) = self.artwork_ui.replace((scale, image)) {
+                cx.drop_image(old, Some(window));
+            }
+        }
+        let (_, image) = self.artwork_ui.as_ref()?;
+        Some((image.clone(), points))
+    }
+}
 
 impl Render for BgmApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -80,7 +120,7 @@ impl Render for BgmApp {
             .flex()
             .flex_col()
             // Room for the traffic lights under the transparent macOS title bar.
-            .pt(px(if cfg!(target_os = "macos") { 40. } else { 16. }))
+            .pt(px(if cfg!(target_os = "macos") { 46. } else { 16. }))
             .px_4()
             .pb_4()
             .gap_4()
@@ -95,6 +135,7 @@ impl Render for BgmApp {
 impl BgmApp {
     fn render_now_playing(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let p = palette(cx);
+        let artwork_image = self.artwork_image(window, cx);
         let Some(player) = &self.player else {
             return div()
                 .flex()
@@ -127,13 +168,14 @@ impl BgmApp {
             .filter(|t| !t.is_empty());
         let subtitle = chapter_title.clone().or_else(|| track.artist.clone());
 
-        let artwork = match &self.artwork_ui {
-            Some(image) => img(image.clone())
-                .size(px(84.))
+        let artwork = match artwork_image {
+            Some((image, size)) => img(image)
+                .w(size.width)
+                .h(size.height)
                 .rounded_md()
                 .into_any_element(),
             None => div()
-                .size(px(84.))
+                .size(px(ARTWORK_BOX.1))
                 .rounded_md()
                 .bg(p.panel)
                 .into_any_element(),
@@ -159,7 +201,9 @@ impl BgmApp {
                     div()
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_base()
-                        .line_clamp(2)
+                        // The mini player has room for one line only.
+                        .when(self.state.compact, |el| el.truncate())
+                        .when(!self.state.compact, |el| el.line_clamp(2))
                         .child(SharedString::from(
                             chapter_title.unwrap_or_else(|| track.title.clone()),
                         )),
