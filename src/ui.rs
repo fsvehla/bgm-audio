@@ -1,9 +1,9 @@
 //! The window's contents.
 
 use gpui::{
-    AnyElement, Context, ExternalPaths, FontWeight, InteractiveElement, IntoElement, ParentElement,
-    Render, SharedString, StatefulInteractiveElement, Styled, Window, div, img, prelude::*, px,
-    relative,
+    AnyElement, Context, ExternalPaths, FontFeatures, FontWeight, InteractiveElement, IntoElement,
+    ParentElement, Render, SharedString, StatefulInteractiveElement, Styled, Window, div, img,
+    prelude::*, px, relative,
 };
 use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::scroll::ScrollableElement;
@@ -67,6 +67,11 @@ impl Render for BgmApp {
             .bg(p.bg)
             .text_color(p.text)
             .text_sm()
+            // System font (SF Pro) with tabular figures, so the times don't jitter.
+            .when(cfg!(target_os = "macos"), |el| {
+                el.font_family(".SystemUIFont")
+                    .font_features(FontFeatures(std::sync::Arc::new(vec![("tnum".into(), 1)])))
+            })
             .flex()
             .flex_col()
             // Room for the traffic lights under the transparent macOS title bar.
