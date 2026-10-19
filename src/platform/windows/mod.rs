@@ -26,7 +26,9 @@ pub mod mic {
 }
 
 mod appearance;
-pub use appearance::{accent_color, set_app_appearance, style_title_bar, watch_accent};
+pub use appearance::{
+    accent_color, set_app_appearance, style_title_bar, system_colors, watch_accent,
+};
 
 pub fn make_bookmark(_path: &Path) -> Option<String> {
     None

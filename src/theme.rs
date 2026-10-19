@@ -1,8 +1,9 @@
 //! Colours: light or dark following the system appearance, accent colour from
-//! System Settings → Appearance. The palette is a GPUI global; `apply` also
+//! System Settings → Appearance. On macOS the window colours are the system's own
+//! (`platform::system_colors`); Windows uses the fixed ones below. The palette is a GPUI global; `apply` also
 //! feeds it into gpui-component's theme so its widgets match our own elements.
 
-use crate::platform;
+use crate::platform::{self, SystemColors};
 use crate::state::Appearance;
 use gpui::{App, Global, Hsla, WindowAppearance, hsla, rgb};
 use gpui_component::{Theme, ThemeMode};
@@ -34,9 +35,31 @@ pub struct Palette {
 impl Global for Palette {}
 
 impl Palette {
-    fn new(dark: bool, accent: Hsla) -> Self {
+    fn new(dark: bool, accent: Hsla, system: Option<SystemColors>) -> Self {
         let c = |hex: u32| -> Hsla { rgb(hex).into() };
-        let base = if dark {
+        let base = if let Some(s) = system {
+            // Opaque, so overlapping fills (hover on a button) don't add up.
+            let bg = gpui::Rgba {
+                a: 1.0,
+                ..s.background
+            };
+            let panel = over(s.fill, bg);
+            Palette {
+                dark,
+                bg: bg.into(),
+                panel: panel.into(),
+                panel_hover: over(s.fill, panel).into(),
+                text: over(s.label, bg).into(),
+                muted: over(s.secondary_label, bg).into(),
+                warn: s.red.into(),
+                marker: if dark {
+                    hsla(0., 0., 0.08, 0.6)
+                } else {
+                    hsla(0., 0., 1., 0.7)
+                },
+                ..Self::placeholder()
+            }
+        } else if dark {
             Palette {
                 dark,
                 bg: c(0x15181b),
@@ -95,6 +118,17 @@ impl Palette {
     }
 }
 
+/// `top` (translucent) drawn over the opaque `bottom`.
+fn over(top: gpui::Rgba, bottom: gpui::Rgba) -> gpui::Rgba {
+    let mix = |t: f32, b: f32| t * top.a + b * (1.0 - top.a);
+    gpui::Rgba {
+        r: mix(top.r, bottom.r),
+        g: mix(top.g, bottom.g),
+        b: mix(top.b, bottom.b),
+        a: 1.0,
+    }
+}
+
 pub fn palette(cx: &App) -> Palette {
     *cx.global::<Palette>()
 }
@@ -113,6 +147,7 @@ pub fn apply(system: WindowAppearance, cx: &mut App) {
     let p = Palette::new(
         dark,
         platform::accent_color().unwrap_or(rgb(0x007aff).into()),
+        platform::system_colors(dark),
     );
     cx.set_global(p);
 

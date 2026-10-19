@@ -1,8 +1,10 @@
-//! Light/dark and the accent colour: NSApp.appearance and NSColor.controlAccentColor.
+//! Light/dark and the system colours: NSApp.appearance, NSColor.controlAccentColor and
+//! the window colours (windowBackgroundColor, labelColor, …).
 
+use std::cell::Cell;
 use std::ptr::NonNull;
 
-use block2::RcBlock;
+use block2::{RcBlock, StackBlock};
 use futures::channel::mpsc::UnboundedSender;
 use gpui::Hsla;
 use objc2::MainThreadMarker;
@@ -13,6 +15,7 @@ use objc2_app_kit::{
 use objc2_foundation::{NSNotification, NSNotificationCenter, NSOperationQueue};
 
 use crate::Event;
+use crate::platform::SystemColors;
 use crate::state::Appearance;
 
 /// Sets `NSApp.appearance` (nil follows the system).
@@ -44,6 +47,42 @@ pub fn accent_color() -> Option<Hsla> {
         a: 1.0,
     };
     Some(rgba.into())
+}
+
+/// The window colours as AppKit draws them in light (Aqua) or dark (Dark Aqua).
+pub fn system_colors(dark: bool) -> Option<SystemColors> {
+    let name = unsafe {
+        if dark {
+            NSAppearanceNameDarkAqua
+        } else {
+            NSAppearanceNameAqua
+        }
+    };
+    let appearance = NSAppearance::appearanceNamed(name)?;
+    let colors = Cell::new(None);
+    // Dynamic colours resolve against the current drawing appearance.
+    let resolve = StackBlock::new(|| {
+        let srgb = |color: objc2::rc::Retained<NSColor>| {
+            let c = color.colorUsingColorSpace(&NSColorSpace::sRGBColorSpace())?;
+            Some(gpui::Rgba {
+                r: c.redComponent() as f32,
+                g: c.greenComponent() as f32,
+                b: c.blueComponent() as f32,
+                a: c.alphaComponent() as f32,
+            })
+        };
+        colors.set((|| {
+            Some(SystemColors {
+                background: srgb(NSColor::windowBackgroundColor())?,
+                fill: srgb(NSColor::systemFillColor())?,
+                label: srgb(NSColor::labelColor())?,
+                secondary_label: srgb(NSColor::secondaryLabelColor())?,
+                red: srgb(NSColor::systemRedColor())?,
+            })
+        })());
+    });
+    appearance.performAsCurrentDrawingAppearance(&resolve);
+    colors.get()
 }
 
 /// Sends `Event::SystemColorsChanged` when the accent colour changes in System Settings.

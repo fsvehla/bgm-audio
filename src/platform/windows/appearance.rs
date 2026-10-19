@@ -30,6 +30,11 @@ pub fn accent_color() -> Option<Hsla> {
     Some(rgba.into())
 }
 
+/// Windows has no window colours worth following here; the palette keeps its own.
+pub fn system_colors(_dark: bool) -> Option<crate::platform::SystemColors> {
+    None
+}
+
 /// Sends `Event::SystemColorsChanged` when the accent colour (or light/dark) changes.
 pub fn watch_accent(tx: UnboundedSender<Event>) {
     let Ok(settings) = UISettings::new() else {

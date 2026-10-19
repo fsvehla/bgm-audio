@@ -39,7 +39,7 @@ Explorer, and pausing while the microphone is in use.
   Can be turned off
 - Mini player mode
 - Light/dark follows the system, or is set in the View menu. Accent colour
-  follows the system
+  follows the system; on macOS the window colours are the system's too
 
 ## Usage
 
