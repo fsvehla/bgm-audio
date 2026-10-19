@@ -37,7 +37,7 @@ Explorer, and pausing while the microphone is in use.
   appearance and window frame. Recent files list. Moved files are found again
 - Pauses while another app uses the microphone (calls), resumes afterwards.
   Can be turned off
-- Mini player mode
+- Mini player mode (on macOS with the desktop blurred behind it)
 - Light/dark follows the system, or is set in the View menu. Accent colour
   follows the system; on macOS the window colours are the system's too
 

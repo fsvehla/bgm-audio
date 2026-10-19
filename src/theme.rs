@@ -38,17 +38,21 @@ impl Palette {
     fn new(dark: bool, accent: Hsla, system: Option<SystemColors>) -> Self {
         let c = |hex: u32| -> Hsla { rgb(hex).into() };
         let base = if let Some(s) = system {
-            // Opaque, so overlapping fills (hover on a button) don't add up.
             let bg = gpui::Rgba {
                 a: 1.0,
                 ..s.background
             };
-            let panel = over(s.fill, bg);
+            // Fills stay translucent, as the system defines them, so the mini player's
+            // blur shows through the buttons too. Hover is a second layer of the fill.
+            let hover = gpui::Rgba {
+                a: 1.0 - (1.0 - s.fill.a).powi(2),
+                ..s.fill
+            };
             Palette {
                 dark,
                 bg: bg.into(),
-                panel: panel.into(),
-                panel_hover: over(s.fill, panel).into(),
+                panel: s.fill.into(),
+                panel_hover: hover.into(),
                 text: over(s.label, bg).into(),
                 muted: over(s.secondary_label, bg).into(),
                 warn: s.red.into(),
@@ -166,7 +170,15 @@ pub fn apply(system: WindowAppearance, cx: &mut App) {
         let t = &mut theme.colors;
         t.background = p.bg;
         t.foreground = p.text;
-        t.border = p.panel_hover;
+        // A translucent fill (system colours) needs no outline; a drawn one would show
+        // as a ring where it overlaps the fill.
+        t.border = if p.panel.a < 1. {
+            Hsla::transparent_black()
+        } else {
+            p.panel_hover
+        };
+        // Default buttons take their outline from the input border.
+        t.input = t.border;
         t.ring = p.accent;
         t.primary = p.accent;
         t.primary_hover = p.accent_hover;

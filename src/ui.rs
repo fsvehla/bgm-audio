@@ -64,7 +64,12 @@ impl Render for BgmApp {
                 }
             }))
             .size_full()
-            .bg(p.bg)
+            .bg(if self.state.compact && cfg!(target_os = "macos") {
+                // Over the blur behind the window (main.rs, set_backdrop).
+                p.bg.opacity(0.6)
+            } else {
+                p.bg
+            })
             .text_color(p.text)
             .text_sm()
             // System font (SF Pro) with tabular figures, so the times don't jitter.

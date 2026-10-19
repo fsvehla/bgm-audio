@@ -118,6 +118,18 @@ pub struct BgmApp {
     _subscriptions: Vec<gpui::Subscription>,
 }
 
+/// macOS: the mini player shows the desktop through a blur (ui.rs tints it with a
+/// translucent background); the full window stays opaque.
+fn set_backdrop(compact: bool, window: &mut gpui::Window) {
+    if cfg!(target_os = "macos") {
+        window.set_background_appearance(if compact {
+            gpui::WindowBackgroundAppearance::Blurred
+        } else {
+            gpui::WindowBackgroundAppearance::Opaque
+        });
+    }
+}
+
 impl BgmApp {
     fn new(
         state: State,
@@ -479,6 +491,7 @@ impl BgmApp {
         self.state.save();
         cx.set_menus(app_menus(&self.state, cx));
         window.resize(size(current.width, px(height)));
+        set_backdrop(self.state.compact, window);
         cx.notify();
     }
 
@@ -864,6 +877,7 @@ fn main() {
                     app
                 });
                 platform::style_title_bar(window, theme::palette(cx).dark);
+                set_backdrop(view.read(cx).state.compact, window);
                 window.focus(&view.read(cx).focus.clone(), cx);
                 view
             },
