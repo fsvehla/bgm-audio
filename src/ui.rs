@@ -106,7 +106,7 @@ impl Render for BgmApp {
             .size_full()
             .bg(if self.state.compact && cfg!(target_os = "macos") {
                 // Over the blur behind the window (main.rs, set_backdrop).
-                p.bg.opacity(0.6)
+                p.bg.opacity(0.8)
             } else {
                 p.bg
             })

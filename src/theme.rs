@@ -53,8 +53,10 @@ impl Palette {
                 bg: bg.into(),
                 panel: s.fill.into(),
                 panel_hover: hover.into(),
-                text: over(s.label, bg).into(),
-                muted: over(s.secondary_label, bg).into(),
+                // Translucent like the fills: over the mini player's tinted blur they
+                // keep their contrast whatever the desktop behind it shows.
+                text: s.label.into(),
+                muted: s.secondary_label.into(),
                 warn: s.red.into(),
                 marker: if dark {
                     hsla(0., 0., 0.08, 0.6)
@@ -119,17 +121,6 @@ impl Palette {
             warn: none,
             marker: none,
         }
-    }
-}
-
-/// `top` (translucent) drawn over the opaque `bottom`.
-fn over(top: gpui::Rgba, bottom: gpui::Rgba) -> gpui::Rgba {
-    let mix = |t: f32, b: f32| t * top.a + b * (1.0 - top.a);
-    gpui::Rgba {
-        r: mix(top.r, bottom.r),
-        g: mix(top.g, bottom.g),
-        b: mix(top.b, bottom.b),
-        a: 1.0,
     }
 }
 
